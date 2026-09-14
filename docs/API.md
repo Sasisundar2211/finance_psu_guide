@@ -2,10 +2,25 @@
 
 This is primarily a server-rendered Django application (Bootstrap + lightweight JS per REQ-WEB-06), not a JSON SPA backend. The endpoints below are the subset that need a request/response contract because they're called via JS (AJAX) rather than rendered as a full page: payment, autosave, and PDF access. Everything else (course listing, blog, dashboard) is standard Django views/templates and isn't enumerated as "API".
 
-No API surface was specified in any source document — every endpoint below is an **[Assumption]** shaped to satisfy a **[Confirmed]** requirement from REQUIREMENTS.md. Exact URL paths are illustrative, not contractual.
+No API surface was specified in any source document — every endpoint below is an **[Assumption]** shaped to satisfy a **[Confirmed]** requirement from REQUIREMENTS.md. Exact URL paths are illustrative, not contractual — **except** django-allauth's own installed route prefix and the Google OAuth callback path (below), which are not illustrative once configured: the Google Cloud Console redirect URI must match the deployed callback path exactly, so that specific path is a real contractual constraint, not a placeholder.
 
 ## 1. Auth
 Handled by `django-allauth`'s standard views (signup, login, logout, password reset). Satisfies REQ-ACC-01, including **mandatory email verification** (`ACCOUNT_EMAIL_VERIFICATION = "mandatory"` — DATA_MODEL.md `User`): a new signup cannot log in until the Brevo-sent verification link is clicked. No custom API needed — allauth's own views cover signup, login, logout, password reset, *and* email verification/resend.
+
+**URLconf:** all of the above, plus Google login below, are served by mounting allauth's own URLs once: `path("accounts/", include("allauth.urls"))`. This single include is the entire routing surface for auth — no custom auth view or URL pattern is written by this project.
+
+### Google Login (REQ-ACC-04 — client-approved post-freeze scope addition, DECISIONS.md D14) — corrected this pass (Codex MEDIUM findings 1–2)
+Additive to the above — local signup/login/password-reset are unchanged and remain fully available alongside this.
+
+- `POST /accounts/google/login/` — allauth's standard `socialaccount` login-initiation view. **Not a `GET`:** `SOCIALACCOUNT_LOGIN_ON_GET = False` (SECURITY.md §3) means a bare `GET` to this URL does not start the OAuth handshake — initiation is a CSRF-protected POST. "Continue with Google" is rendered as a POST form/button (`{% provider_login_url 'google' process='login' %}` inside `{% csrf_token %}`), not a plain `<a href>` link. On success, the view redirects the browser to Google's OAuth2 consent screen — server-rendered redirect only, no client-side Google JS SDK, no custom token-handling code written by this project.
+- `GET /accounts/google/login/callback/` — allauth's standard callback view (a real `GET`, since this is Google's own redirect back, not user-initiated). **This exact path must match the Google Cloud Console's configured redirect URI** (DEPLOYMENT.md §4) — production is `https://financepsu.guide/accounts/google/login/callback/`. Google redirects here with an authorization code; allauth exchanges it server-side (PKCE, `OAUTH_PKCE_ENABLED = True`), reads the ID token's email + email-verified flag, then:
+  - matches to an existing `User` by verified email — Google-provider-scoped trust only (`SOCIALACCOUNT_PROVIDERS["google"]["EMAIL_AUTHENTICATION"] = True`, not a project-wide setting), never creates a duplicate account for an already-registered email, and does not leave a permanent `SocialAccount` connection on that `User` from this match (`SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = False`); or
+  - creates a new stock `User` (+ `UserProfile`, same as a local signup) if no match exists — via stock allauth social-signup, with a `SocialAccount` row recording the Google identity as part of that signup (no `SocialToken` persisted, `SOCIALACCOUNT_STORE_TOKENS = False`); or
+  - **for an unverified Google-asserted email, never authenticates or links to an *existing* Finance PSU account** — the account-takeover-relevant guarantee; this does not promise stock allauth creates no row at all for an unmatched, unverified identity, only that it can't reach an existing account via email match (ARCHITECTURE.md §3.2a/§3.6, DECISIONS.md D14).
+- No other custom endpoint is introduced — allauth's built-in `socialaccount` views are the complete surface for this feature, same "no custom API needed" posture as local auth above.
+- **Scopes requested:** `profile`, `email` only — explicitly excludes Gmail, Drive, Contacts, Calendar, or any other Google API scope. Identity assertion only, nothing else.
+- **Session behavior:** identical to local login — the single-active-session middleware (ARCHITECTURE.md §3.2) applies the same way to a session established via Google as to one established via local credentials; a second-device Google login invalidates a first session exactly as REQ-ACC-02/03 already specify, no special-cased logic.
+- See ARCHITECTURE.md §3.2a/§3.6 for the full flow and failure/cancel behavior, SECURITY.md §3 for the settings block, DEPLOYMENT.md §3–4 for environment/console setup.
 
 ## 2. Checkout / Payment (REQ-PAY-01–03) — corrected in D10 and D11, see DECISIONS.md D11.1
 
