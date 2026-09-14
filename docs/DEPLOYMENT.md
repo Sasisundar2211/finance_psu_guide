@@ -50,6 +50,10 @@ EMAIL_HOST_PASSWORD=...
 DEFAULT_FROM_EMAIL="Finance PSU Guide"
 
 BACKUP_AES_PASSPHRASE=...
+
+# Google Login (REQ-ACC-04 — client-approved post-freeze scope addition, DECISIONS.md D14)
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
 ```
 Database connection (built directly from the five discrete `DB_*` variables above — **no `DATABASE_URL` / `dj_database_url` indirection**; per client instruction, avoids connection-slot starvation under load):
 ```python
@@ -68,7 +72,27 @@ DATABASES = {
     }
 }
 ```
-Also set `ACCOUNT_EMAIL_VERIFICATION = "mandatory"` (django-allauth) — REQ-ACC-01, DATA_MODEL.md `User`.
+Also set django-allauth's account settings — stock `User` model, no custom `AUTH_USER_MODEL` (REQ-ACC-01, DATA_MODEL.md `User`, SECURITY.md §3 for the full rationale and version note):
+```python
+ACCOUNT_LOGIN_METHODS = {"username"}
+ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+```
+Also set the Google Login provider config (REQ-ACC-04, client-approved post-freeze scope addition, DECISIONS.md D14) — additive to the settings above, local login is unaffected. Full settings block and rationale in SECURITY.md §3; the env-sourced piece is:
+```python
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online"},
+        "OAUTH_PKCE_ENABLED": True,
+        "APP": {
+            "client_id": os.environ["GOOGLE_OAUTH_CLIENT_ID"],
+            "secret": os.environ["GOOGLE_OAUTH_CLIENT_SECRET"],
+            "key": "",
+        },
+    }
+}
+```
 
 ## 4. Third-Party Account Setup
 
@@ -76,6 +100,11 @@ Also set `ACCOUNT_EMAIL_VERIFICATION = "mandatory"` (django-allauth) — REQ-ACC
 - **Razorpay**: business account, live API keys, webhook URL registered pointing at `/checkout/webhook/`, webhook secret generated.
 - **Brevo**: SMTP account, sender domain verified, within the 300 emails/day free tier. Used only for signup email verification, password reset/update, and an optional purchase-confirmation notice — never a payment/tax receipt (SECURITY.md §7).
 - **GitHub**: repo hosting the source + the Actions workflow for nightly backups. Needs only SSH secrets — `OCI_SSH_HOST`, `OCI_SSH_USER`, `OCI_SSH_PRIVATE_KEY`. **R2 and backup-encryption credentials are never given to GitHub at all** — the workflow's entire job is one SSH command running the `backup` container's `backup` subcommand, which reads the host's own `.env` through Compose (§5).
+- **Google Cloud Console** (REQ-ACC-04 — client-approved post-freeze scope addition, DECISIONS.md D14): an OAuth 2.0 Client ID (Web application type) is created in a Google Cloud project, scoped to identity-only use (`profile`/`email`). This is a one-time operational setup step performed in Google's own console — not a source-controlled artifact, and no actual client ID/secret value is invented or recorded anywhere in this doc set.
+  - **Authorized redirect URI (production):** `https://financepsu.guide/accounts/google/login/callback/` — must match allauth's callback path (API.md §1) exactly, HTTPS required (Google rejects a plain-HTTP redirect URI for a production OAuth client).
+  - **Authorized JavaScript origins:** `https://financepsu.guide` (and `https://www.financepsu.guide` if the www host is kept reachable) — no other origins.
+  - The resulting Client ID/Secret are placed into the host's `.env` as `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` (§3 above) — same handling as every other secret (SECURITY.md §2): never committed, never logged, never placed in `.env.example` as a real value.
+  - OAuth consent screen configured for the identity-only scopes only (`profile`, `email`) — no additional Google API scope is requested or enabled for this project.
 
 ## 5. Backups (REQ-OPS-02) — redesigned this pass; DB host/password/restore made concrete and consistent, see DECISIONS.md D11.3
 

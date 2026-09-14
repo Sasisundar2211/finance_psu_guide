@@ -18,7 +18,7 @@ Finance PSU is an online learning and mock-test platform for PSU/government acco
 
 ## 3. Functional Requirements
 
-Each requirement is tagged **[Confirmed]** (stated explicitly in a source document), **[Resolved implementation baseline]** (a specific implementation choice settled by client freeze or engineering decision where the source document didn't specify one — see DECISIONS.md), or **[Assumption]** (reasonable inference needed to make a confirmed requirement buildable, not explicitly stated, not yet elevated to a resolved baseline). **There are currently no unresolved/open requirements in the frozen baseline** — §7 records the resolution history for what was originally open, not a live open-items list (DECISIONS.md D9–D12).
+Each requirement is tagged **[Confirmed]** (stated explicitly in a source document), **[Resolved implementation baseline]** (a specific implementation choice settled by client freeze or engineering decision where the source document didn't specify one — see DECISIONS.md), **[Assumption]** (reasonable inference needed to make a confirmed requirement buildable, not explicitly stated, not yet elevated to a resolved baseline), or **[Client-approved post-freeze scope addition]** (new scope the client explicitly approved *after* the `docs-baseline-v1` freeze — additive only, never a silent reinterpretation of a frozen item; currently just REQ-ACC-04). **There are currently no unresolved/open requirements in the frozen baseline** — §7 records the resolution history for what was originally open, not a live open-items list (DECISIONS.md D9–D12); the one post-freeze addition is tracked separately via its own tag rather than reopening §7.
 
 ### 3.1 Public Site & Navigation (Invoice: "Website & Student Experience", INR 3,500)
 
@@ -36,7 +36,7 @@ Each requirement is tagged **[Confirmed]** (stated explicitly in a source docume
 - **REQ-WEB-06** [Confirmed] Responsive, mobile-friendly UI built with Bootstrap and lightweight JavaScript (no heavy SPA framework).
   *Acceptance:* All pages usable at 360px–1920px widths via manual QA across common breakpoints. No source document specifies a numeric performance/usability score target, so none is asserted here.
 - **REQ-WEB-07** [Confirmed] Login/Signup pages, reachable from nav and from the enrollment flow.
-  *Acceptance:* A logged-out user attempting "Enroll Now" is routed to Login/Signup, then returned to checkout on success (per workflow doc §5).
+  *Acceptance:* A logged-out user attempting "Enroll Now" is routed to Login/Signup, then returned to checkout on success (per workflow doc §5). **[Client-approved post-freeze scope addition — REQ-ACC-04, DECISIONS.md D14]** Both the Login and Signup pages present the local username/password form **and** a "Continue with Google" option, side by side — deliberate redundancy for account portability, not a replacement of one by the other; every existing local-auth feature (signup, login, logout, password reset) continues to work exactly as before Google login was added.
 
 ### 3.2 Student Dashboard (Invoice: "Website & Student Experience")
 
@@ -72,6 +72,13 @@ Each requirement is tagged **[Confirmed]** (stated explicitly in a source docume
   *Acceptance:* Logging in on a second device/browser invalidates the first session; the first session's next request is treated as unauthenticated.
 - **REQ-ACC-03** [Confirmed — §7 item 2] When a session is invalidated by a new login elsewhere, the displaced session's next request triggers `request.session.flush()` + Django `logout()`, then a redirect to `/login/?error=session_conflict`.
   *Acceptance:* The displaced browser, on its next request after being kicked out, lands on the login page with the `session_conflict` error state — never a silent failure or an unauthenticated 500/403.
+- **REQ-ACC-04** [Client-approved post-freeze scope addition — DECISIONS.md D14] "Continue with Google" is added as an additional, optional login/signup method, on top of the existing local username/password flow, which remains fully in place and unchanged.
+  *Required behavior:*
+  - **Additive only.** Local signup, local login, and password-reset via email (REQ-ACC-01) are not removed, degraded, or hidden — "Continue with Google" appears alongside them, not instead of them.
+  - **Google is the only added social provider.** No GitHub, Facebook, Apple, or Microsoft login is introduced by this change.
+  - **Stock Django `User` model, unchanged.** No custom `AUTH_USER_MODEL` is introduced to support Google login — DATA_MODEL.md `User` stands as-is; django-allauth's own `socialaccount` framework links a Google identity to a stock `User` row (DATA_MODEL.md, new note this pass).
+  - **Finance PSU's own Postgres database remains the system of record** for the account — a Google login authenticates *into* a Finance PSU `User`, it does not move any account data to Google or make Google the source of truth for anything beyond the identity assertion itself (verified email + name) used at sign-in.
+  *Acceptance:* A student can sign up or log in equally well via local credentials or via "Continue with Google"; disabling/removing Google login at any future point would not strand any account that also has local credentials set. See SECURITY.md §3, API.md §1, DEPLOYMENT.md §3–4, TESTING.md for the full implementation baseline.
 
 ### 3.5 MCQs, Mock Tests & Administration (Invoice: INR 4,000)
 

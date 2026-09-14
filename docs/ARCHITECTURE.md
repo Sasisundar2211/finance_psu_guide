@@ -58,7 +58,7 @@ Source of truth for the stack: `technical_stack_specification.pdf` (client-appro
 | Cloudflare (DNS/WAF/CDN) | TLS at the edge, DDoS/WAF, caches public pages (`s-maxage`), fronts the domain | Tech stack doc |
 | Nginx | TLS to origin, request buffering, static file serving, proxy to Gunicorn | Resolved default (DECISIONS.md D5) |
 | Gunicorn + Django 5.2 | All server-side logic: auth, entitlement checks, payment verification, mock-test engine, admin CRUD | Tech stack doc |
-| django-allauth | Signup, login, email verification, password reset | Tech stack doc |
+| django-allauth | Signup, login, email verification, password reset, **and** (client-approved post-freeze, REQ-ACC-04) Google social login via `allauth.socialaccount` + the Google provider — server-rendered OAuth2, no SPA/custom flow | Tech stack doc; Google provider is DECISIONS.md D14 |
 | PostgreSQL 18 | System of record: users, courses, enrollments, questions, attempts, orders | Tech stack doc |
 | Cloudflare R2 | Object storage for course PDFs and encrypted nightly DB backups; served via time-limited presigned URLs, zero egress cost | Tech stack doc |
 | Mozilla PDF.js + boto3 | In-browser PDF rendering to `<canvas>` (no native download UI); Django mints a 60-second presigned URL per view | Tech stack doc |
@@ -80,6 +80,28 @@ Cloudflare edge cache serves homepage/blog/course-catalog HTML directly where po
    - calls Django's `logout()`,
    - and returns a redirect to `/login/?error=session_conflict`.
    *No Redis/Valkey is present in the approved stack, so this is implemented directly against PostgreSQL rather than an in-memory session store — this trades a small amount of per-request DB overhead for staying within the approved, zero-cost stack.*
+
+### 3.2a Google Login (REQ-ACC-04 — client-approved post-freeze scope addition, DECISIONS.md D14) — corrected this pass (Codex MEDIUM findings 1–2)
+Additive to 3.2 above, not a replacement — the local credential flow is unchanged.
+
+**Route contract:** allauth's URLs are mounted via `path("accounts/", include("allauth.urls"))` in the project URLconf — this single include is what serves local login/signup/password-reset **and** the Google initiation/callback routes below; it is not optional wiring left implicit. With `SOCIALACCOUNT_LOGIN_ON_GET = False` (SECURITY.md §3), a plain `GET /accounts/google/login/` does **not** by itself start the OAuth handshake — initiation requires a `POST` to that same URL. "Continue with Google" is rendered as a CSRF-protected POST form/button (`{% provider_login_url 'google' process='login' %}` inside a `{% csrf_token %}` form), not a plain link — this is standard allauth template usage, not a custom view.
+
+1. Student submits the "Continue with Google" POST form → allauth's standard `socialaccount` view initiates the redirect to Google's OAuth2 consent screen (server-rendered redirect, no client-side SDK/JS token flow), requesting identity-only scopes (`profile`, `email`) with PKCE (`OAUTH_PKCE_ENABLED = True`).
+2. Google redirects back to allauth's callback view (`/accounts/google/login/callback/` — API.md §1, DEPLOYMENT.md §3/§4) with an authorization code; allauth exchanges it server-side for an ID token/profile, online access only (no `access_type=offline`, no refresh token requested or stored — `SOCIALACCOUNT_STORE_TOKENS = False`).
+3. allauth reads the Google-asserted email and its verification flag from the ID token. Email-authentication trust is **Google-provider-scoped**, not a global setting — `SOCIALACCOUNT_PROVIDERS["google"]["EMAIL_AUTHENTICATION"] = True`, not a project-wide `SOCIALACCOUNT_EMAIL_AUTHENTICATION = True` (SECURITY.md §3) — since only Google is an approved provider today.
+   - **Google-verified email matches an existing `User.email`:** authenticate into that existing `User` — never create a duplicate account, and no new `SocialAccount` connection row is left permanently attached to that `User` from this match (`SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = False` — DECISIONS.md D14 finding 4, Case A). This uses allauth's own Google-scoped verified-email matching, not a bespoke lookup (SECURITY.md §3 for the exact settings and their effect).
+   - **No existing match:** stock allauth social-signup behavior applies (`SOCIALACCOUNT_AUTO_SIGNUP` default) — a new stock `User` is created (no custom `AUTH_USER_MODEL`, no custom adapter), with a `SocialAccount` row recording the Google identity as part of that signup (DECISIONS.md D14 finding 4, Case B); `UserProfile` is created the same way a local signup creates one.
+   - **Google-asserted email not verified by Google itself:** the important guarantee is narrower and account-takeover-focused — an unverified provider email **must never authenticate or link to an existing Finance PSU account** via email matching (§3.6 below). It does not promise that stock allauth can never create any pending row for an unmatched, unverified social identity; no custom `SocialAccountAdapter` is added solely to forbid that, since it isn't the risk this control exists to close. If verification is required before the resulting account gets authenticated access, the student must complete that verification the same way any unverified signup would (REQ-ACC-01).
+4. Same as any other login (step 2 of §3.2 above): the new session's key is written to `UserProfile.active_session_key`, and the existing single-active-session middleware applies identically — a Google login on a second device invalidates a first session exactly the way a local-credential login does. No separate session-handling path exists for Google.
+5. **Google's own account/session state is never treated as Finance PSU's system of record.** Postgres remains authoritative for the `User`/`UserProfile`/entitlement rows exactly as before; Google is consulted only at the moment of authentication to assert "this verified email belongs to whoever is signing in right now."
+
+### 3.6 Google Login failure/cancel behavior (REQ-ACC-04)
+- **User cancels at Google's consent screen:** returned safely to the login page — no local authentication occurs, and no session is established for the browser initiating the attempt.
+- **Google returns a provider error (5xx, malformed response, etc.):** no local authentication occurs; the student lands back on login with a generic error, local login remains fully usable.
+- **Invalid/tampered OAuth `state` or callback parameters:** rejected by allauth's own CSRF/state validation — never silently accepted.
+- **Unverified Google-asserted email:** never authenticates or links to an **existing** Finance PSU account via email matching (§3.2a step 3 above) — the account-takeover-relevant guarantee this control exists for.
+- **Missing/invalid `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` at request time:** treated as a configuration error (fails closed, logged) — never an insecure fallback (e.g. never falls back to "authenticate anyway").
+- A failure anywhere in this flow never breaks or disables local username/password login — the two paths are independent at the view level.
 
 ### 3.3 Enrollment & payment (REQ-PAY-01–03) — corrected in D10 and D11.1, see DECISIONS.md D11.1
 1. Student selects a course + validity plan → `Enroll Now`.
