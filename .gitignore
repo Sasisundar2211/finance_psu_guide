@@ -38,3 +38,7 @@ Thumbs.db
 # Claude/local AI state
 .claude-flow/
 .remember/
+.serena/
+
+# Node/local tooling artifacts
+node_modules/
