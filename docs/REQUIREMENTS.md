@@ -16,10 +16,6 @@ All requirements below are derived exclusively from these three documents (Googl
 
 Finance PSU is an online learning and mock-test platform for PSU/government accounting exam candidates (AAI, SPMCIL, CONCOR, MECL, PFRDA, CMA, etc.). Students browse and purchase courses, read protected PDF study material in-browser (no download), and take timed MCQ mock tests. Target: 10,000 concurrent users (capacity to be verified by load testing before launch at that scale, per the invoice — not a hard guarantee at handover).
 
-## 3. Functional Requirements
-
-Each requirement is tagged **[Confirmed]** (stated explicitly in a source document), **[Resolved implementation baseline]** (a specific implementation choice settled by client freeze or engineering decision where the source document didn't specify one — see DECISIONS.md), **[Assumption]** (reasonable inference needed to make a confirmed requirement buildable, not explicitly stated, not yet elevated to a resolved baseline), or **[Client-approved post-freeze scope addition]** (new scope, or a change to previously-frozen scope, the client explicitly approved *after* the `docs-baseline-v1` freeze — never a silent reinterpretation of a frozen item; currently REQ-ACC-04, the REQ-COURSE-03 print-policy change (DECISIONS.md D15), and NFR-07 (DECISIONS.md D16)). **There are currently no unresolved/open requirements in the frozen baseline** — §7 records the resolution history for what was originally open, not a live open-items list (DECISIONS.md D9–D12); post-freeze additions/changes are tracked separately via this tag rather than reopening §7.
-
 ## 2.1 Top-Level Product Principles
 
 Four top-level principles the client has explicitly confirmed govern this build. Each is detailed elsewhere in this document and cross-referenced rather than duplicated here:
@@ -28,6 +24,10 @@ Four top-level principles the client has explicitly confirmed govern this build.
 - **Single active session** — one `User` account has exactly one active authenticated session at a time; a successful login elsewhere invalidates the prior session on its next request, identically whether either session is local-credential or Google-authenticated (REQ-ACC-02, REQ-ACC-03).
 - **Protected PDFs** — no normal Download control is ever exposed in the viewer; printing is intentionally permitted (client-approved post-freeze change, DECISIONS.md D15); text-copy deterrence remains (REQ-COURSE-03).
 - **Long-term maintainability** — the system favors supported/LTS software, routine upgrades, and a simple, conventional, portable architecture over a 5–10 year operational lifetime, rather than freezing today's exact versions (NFR-07, DECISIONS.md D16).
+
+## 3. Functional Requirements
+
+Each requirement is tagged **[Confirmed]** (stated explicitly in a source document), **[Resolved implementation baseline]** (a specific implementation choice settled by client freeze or engineering decision where the source document didn't specify one — see DECISIONS.md), **[Assumption]** (reasonable inference needed to make a confirmed requirement buildable, not explicitly stated, not yet elevated to a resolved baseline), or **[Client-approved post-freeze scope addition]** (new scope, or a change to previously-frozen scope, the client explicitly approved *after* the `docs-baseline-v1` freeze — never a silent reinterpretation of a frozen item; currently REQ-ACC-04, the REQ-COURSE-03 print-policy change (DECISIONS.md D15), and NFR-07 (DECISIONS.md D16)). **There are currently no unresolved/open requirements in the frozen baseline** — §7 records the resolution history for what was originally open, not a live open-items list (DECISIONS.md D9–D12); post-freeze additions/changes are tracked separately via this tag rather than reopening §7.
 
 ### 3.1 Public Site & Navigation (Invoice: "Website & Student Experience", INR 3,500)
 
