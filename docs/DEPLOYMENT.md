@@ -193,3 +193,5 @@ Decoupled from the 14-day build window by client decision:
 From the approved stack doc's own closing note: **Django 5.2 LTS receives security patches until April 2028.** Management should schedule a version-upgrade window to the next LTS baseline in early 2028, to keep the platform inside its security-patch support window past that date.
 
 This is recorded here purely as a future maintenance planning note — it does not add any obligation, contract, or deliverable to this engagement, and it is explicitly **not** a condition of handover under REQ-OPS-05. No other maintenance commitments beyond this single, source-stated note are implied or invented.
+
+**Client-approved 5–10 year maintainability objective (DECISIONS.md D16):** the Django 5.2 LTS window above is the first of what the client expects to be routine, supported dependency/framework upgrades over the platform's intended 5–10 year operational lifetime — today's exact versions are not expected to remain frozen for that whole period. This is an expectation for future maintenance work, not a new deliverable inside this engagement, and does not introduce any new infrastructure now.

@@ -76,7 +76,7 @@ The approved stack's 60-second presigned URL is short enough that a design relyi
 5. If the initial full GET fails *before* the document finishes loading (network blip, or the 60s window lapsed before the fetch completed), the client requests **one** fresh signed URL and retries the initial fetch once — it does not attempt to parse an expired R2 403 response body or retry indefinitely.
 6. Reopening the same chapter later (new page load, or after closing the viewer) repeats the whole entitlement-check-plus-fresh-URL sequence from step 1 — no signed URL is ever reused across separate opens.
 
-**Consequences:** R2 stays private, Django never proxies/streams PDF bytes itself, no permanent URL is created anywhere, and the approved 60-second expiry is unchanged — it now bounds only the initial fetch, not the reading session. The known DRM residual-risk note (SECURITY.md §5) still applies unchanged: this deters casual download/print/copy, not a determined screenshot/devtools capture.
+**Consequences:** R2 stays private, Django never proxies/streams PDF bytes itself, no permanent URL is created anywhere, and the approved 60-second expiry is unchanged — it now bounds only the initial fetch, not the reading session. The known DRM residual-risk note (SECURITY.md §5) still applies to what it covers: this deters casual download/copy, not a determined screenshot/devtools capture. Printing is intentionally permitted (client-approved post-freeze change, DECISIONS.md D15) and is outside this deterrence entirely, not merely a gap in it — the browser/OS print dialog's own "Save as PDF" output is a known, accepted limitation, not something this design defends against.
 
 ## 4. Mock Test Access Authorization — new this pass (DECISIONS.md D10 item 3, REQ-MOCK-05)
 
