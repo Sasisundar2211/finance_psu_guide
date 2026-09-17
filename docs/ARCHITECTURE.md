@@ -134,6 +134,8 @@ Single OCI VM running Docker Compose with three application-layer services — `
 
 This means the VM is not freely disposable in the way a stateless web server would be: redeploying application *code* is safe and routine (DEPLOYMENT.md §6, doesn't touch the volume), but replacing the VM itself requires restoring the Postgres volume from the latest R2 backup snapshot (DEPLOYMENT.md §5 restore runbook) — losing the volume without a recent snapshot loses data back to the last nightly backup. See DEPLOYMENT.md for the full provisioning and backup sequence.
 
+**Long-term maintainability (client-approved post-freeze principle, DECISIONS.md D16):** this topology is intentionally a conventional, portable Django/PostgreSQL/Docker Compose design with no vendor-specific application architecture. Finance PSU must not depend on an optional server-management panel (e.g. Dokploy/Coolify/1Panel) to function — such tooling, if ever adopted, is operational convenience layered on top of this topology, never a load-bearing part of it.
+
 ## 5. Operational Verification & Go-Live Checks
 
 The architecture is defined and frozen (DECISIONS.md D1–D12) — nothing below is an open design question. These are operational verification tasks that remain to be *executed*, not decisions that remain to be *made*.

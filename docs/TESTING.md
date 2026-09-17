@@ -18,7 +18,7 @@ No test strategy was specified in any source document. This plan is derived to g
 **Tier 2 — automated where practical, manual QA acceptable given the timeline:**
 - Course/mock-test listing and detail rendering (REQ-WEB-03/04).
 - Dashboard figures (REQ-DASH-01) match underlying enrollment/attempt data, including "recently accessed course".
-- PDF viewer: page nav, zoom, fullscreen, and absence of a download control (REQ-COURSE-02/03).
+- PDF viewer: page nav, zoom, fullscreen, presence of a working print control, and absence of a download control (REQ-COURSE-02/03).
 - Admin PDF upload path (API.md §7): stores only a private object key, never a public URL.
 
 **Tier 3 — manual QA only, given the 14-day scope:**
@@ -109,7 +109,7 @@ The invoice frames 10,000-concurrent-user capacity as something to be **verified
 - [ ] Successful payment (test mode) → course appears in My Courses immediately.
 - [ ] Dashboard shows correct purchased courses, purchased mock tests, progress, and recently accessed course.
 - [ ] Course opens as book list → book opens as chapter list → chapter opens PDF viewer.
-- [ ] PDF viewer: page navigation, zoom in/out, fullscreen all functional; no download button present; right-click save is not offered; Ctrl+P / browser print is blocked; selecting/copying viewer text does not work. Open a chapter, read for over 60 seconds (past presigned-URL expiry) — confirm page navigation is unaffected, since the document loaded fully into memory up front (D11.4).
+- [ ] PDF viewer: page navigation, zoom in/out, fullscreen all functional; no download button present; right-click save is not offered; Ctrl+P / the browser's print control opens normal print behavior (client-approved, D15) — no test asserts that the browser/OS print dialog's own "Save as PDF" output can be reliably blocked; selecting/copying viewer text does not work. Open a chapter, read for over 60 seconds (past presigned-URL expiry) — confirm page navigation is unaffected, since the document loaded fully into memory up front (D11.4).
 - [ ] Mock test: timer visible and counting down; answers autosave; submit produces a result; timeout auto-submits; answers can't be changed after the timer visually reaches zero.
 - [ ] A course-included mock test (via `CourseMockTest`) is reachable from inside its purchased course, without a separate mock-test purchase.
 - [ ] Second login on another browser/device: first session's next request lands on `/login/?error=session_conflict`, not a silent failure.
