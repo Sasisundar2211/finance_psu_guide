@@ -29,7 +29,7 @@
 
 **Rationale:** Adding an entirely new infrastructure component (and its own container, memory budget, and failure mode) to satisfy one feature contradicts the approved stack's own stated goal — "avoiding distributed microservice complexity" and staying on a ₹0 base-cost footprint. Postgres already holds session state via Django's session framework; extending it is the smaller change.
 
-**Update (REQUIREMENTS.md §7 item 3, client-frozen):** the client's own resolution puts the tracked session key directly on a `UserProfile` model (`active_session_key`) rather than the standalone `ActiveSession` table this decision originally proposed — same PostgreSQL-only mechanism, simpler shape. DATA_MODEL.md and ARCHITECTURE.md §3.2 now reflect `UserProfile`, not `ActiveSession`. The exact conflict-handling behavior (`session.flush()` + `logout()` + redirect to `/login/?error=session_conflict`) is also now frozen — see REQ-ACC-03.
+**Update (REQUIREMENTS.md §7 item 3, client-frozen):** the client's own resolution puts the tracked session key directly on a `UserProfile` model (`active_session_key`) rather than the standalone `ActiveSession` table this decision originally proposed — same PostgreSQL-only mechanism, simpler shape. DATA_MODEL.md and ARCHITECTURE.md §3.2 now reflect `UserProfile`, not `ActiveSession`. The exact conflict-handling behavior (`session.flush()` + `logout()` + redirect to `/login/?error=session_conflict`) is also now frozen — see REQ-ACC-03. **[Route superseded by D17 below — the canonical redirect is `/accounts/login/?error=session_conflict`; the flush/logout/redirect behavior itself is unaffected and still stands.]**
 
 ## D4 — Autosave is server-synced, not client-only
 
@@ -232,3 +232,17 @@ See SECURITY.md §3 for the full settings block and field-by-field rationale, DE
 **Rationale:** A long operational horizon is best served by keeping the system boring, conventional, and well-tested rather than by pre-building for scale or flexibility it doesn't yet need — consistent with this project's existing "Simplicity First" stance (CLAUDE.md) and the approved stack's own zero-vendor-lock-in framing. Recording it as an explicit principle here means future maintenance work has a stated client expectation to work against, rather than an implicit assumption.
 
 **Status:** Documentation only, applied to REQUIREMENTS.md (NFR-07, §2.1), ARCHITECTURE.md (§4), DEPLOYMENT.md (§9). No schema change — DATA_MODEL.md's 16 models are unaffected. No application code, migrations, or tests were changed in this pass.
+
+## D17 — Canonical displaced-session login route
+
+**Context:** REQUIREMENTS.md REQ-ACC-03, ARCHITECTURE.md §3.2, and TESTING.md's displaced-session redirect all referenced `/login/?error=session_conflict`. That path was never accurate: allauth is mounted exclusively via `path("accounts/", include("allauth.urls"))` (API.md §1, `config/urls.py`), and this project introduces no custom authentication URL or view. The actual, and only, standard login route is `/accounts/login/`.
+
+**Decision:**
+- The canonical displaced-session redirect is `/accounts/login/?error=session_conflict`.
+- This is a route-contract correction only — no separate `/login/` alias is introduced to satisfy the stale path.
+- The behavioral semantics of REQ-ACC-02/REQ-ACC-03 are entirely unchanged: one `User` has exactly one active authenticated session; the newest successful login wins; the displaced session's next request still triggers `request.session.flush()` + Django `logout()`; the displaced user still lands on the login page carrying `error=session_conflict`; this applies identically to local and Google-authenticated sessions.
+- This supersedes the `/login/?error=session_conflict` route text in D3's update note, and the same stale path previously in REQUIREMENTS.md REQ-ACC-03/§7 item 2, ARCHITECTURE.md §3.2, and TESTING.md. D3's own reasoning (PostgreSQL over Redis/Valkey for session tracking, and the `UserProfile.active_session_key` shape) is unaffected and not rewritten.
+
+**Rationale:** The route was an unverified assumption carried forward from before the URLconf was frozen to allauth's single `accounts/` mount point; no code ever implemented a bare `/login/` path, and inventing one solely to match stale documentation would contradict API.md's own "no custom auth view or URL pattern is written by this project" statement. Correcting the documented route to match the frozen URLconf is the smaller, correct fix.
+
+**Status:** Documentation only, applied to REQUIREMENTS.md (REQ-ACC-03, §7 item 2), ARCHITECTURE.md (§3.2), TESTING.md (§2 unit-test note, Google Login integration item 7, manual QA checklist). API.md required no change — it already correctly described the `accounts/` mount with no separate login route. DATA_MODEL.md is unchanged. No application code, migrations, or tests were changed in this pass — no view/middleware implementing this redirect exists yet in Phase 2's scope.
