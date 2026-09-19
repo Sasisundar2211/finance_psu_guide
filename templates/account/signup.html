@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load socialaccount %}
+
+{% block title %}Sign up — Finance PSU{% endblock %}
+
+{% block content %}
+<main class="container my-5" style="max-width: 28rem;">
+    <h1 class="h3 mb-4">Create your account</h1>
+
+    <form method="post" action="{% url 'account_signup' %}" class="mb-3">
+        {% csrf_token %}
+        {{ redirect_field }}
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+        {% for field in form.visible_fields %}
+        <div class="mb-3">
+            {{ field.label_tag }}
+            {{ field }}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary w-100">Sign up</button>
+    </form>
+
+    <form method="post" action="{% provider_login_url 'google' process='login' %}" class="mb-3">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-secondary w-100">Continue with Google</button>
+    </form>
+
+    <p class="small">
+        Already have an account? <a href="{% url 'account_login' %}">Sign in</a>
+    </p>
+</main>
+{% endblock %}
