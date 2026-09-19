@@ -78,7 +78,7 @@ Cloudflare edge cache serves homepage/blog/course-catalog HTML directly where po
 3. A request-level middleware compares the request's session key against `request.user.userprofile.active_session_key`. On a mismatch (i.e. this session has been superseded by a newer login elsewhere), the middleware immediately:
    - calls `request.session.flush()`,
    - calls Django's `logout()`,
-   - and returns a redirect to `/login/?error=session_conflict`.
+   - and returns a redirect to `/accounts/login/?error=session_conflict` — allauth's mounted login route (`path("accounts/", include("allauth.urls"))`, API.md §1); no separate `/login/` route exists (route corrected this pass, DECISIONS.md D17).
    *No Redis/Valkey is present in the approved stack, so this is implemented directly against PostgreSQL rather than an in-memory session store — this trades a small amount of per-request DB overhead for staying within the approved, zero-cost stack.*
 
 ### 3.2a Google Login (REQ-ACC-04 — client-approved post-freeze scope addition, DECISIONS.md D14) — corrected this pass (Codex MEDIUM findings 1–2)

@@ -79,7 +79,7 @@ Each requirement is tagged **[Confirmed]** (stated explicitly in a source docume
   *Acceptance:* A user can sign up, log in, log out, and reset a forgotten password via email. **[Resolved implementation baseline — production security decision, DECISIONS.md D11.6]** A newly signed-up user **cannot log in** until they click the verification link sent to their email (`ACCOUNT_EMAIL_VERIFICATION = "mandatory"`, DATA_MODEL.md `User`, SECURITY.md §3). *Provenance correction:* the approved stack doc says django-allauth performs "email confirmations" — it does not itself specify *mandatory* (block-login-until-verified) verification; that specific mode is an engineering decision made to satisfy the requirement meaningfully, not a stack-doc mandate. Previously mislabeled `[Confirmed]` on that basis — corrected this pass.
 - **REQ-ACC-02** [Confirmed] One independently active login session per account ("single active session" / one-device enforcement) to reduce account sharing.
   *Acceptance:* Logging in on a second device/browser invalidates the first session; the first session's next request is treated as unauthenticated.
-- **REQ-ACC-03** [Confirmed — §7 item 2] When a session is invalidated by a new login elsewhere, the displaced session's next request triggers `request.session.flush()` + Django `logout()`, then a redirect to `/login/?error=session_conflict`.
+- **REQ-ACC-03** [Confirmed — §7 item 2; route corrected this pass, DECISIONS.md D17] When a session is invalidated by a new login elsewhere, the displaced session's next request triggers `request.session.flush()` + Django `logout()`, then a redirect to `/accounts/login/?error=session_conflict` — the canonical allauth login route (`path("accounts/", include("allauth.urls"))`, API.md §1); no separate `/login/` route exists or is introduced.
   *Acceptance:* The displaced browser, on its next request after being kicked out, lands on the login page with the `session_conflict` error state — never a silent failure or an unauthenticated 500/403.
 - **REQ-ACC-04** [Client-approved post-freeze scope addition — DECISIONS.md D14] "Continue with Google" is added as an additional, optional login/signup method, on top of the existing local username/password flow, which remains fully in place and unchanged.
   *Required behavior:*
@@ -166,7 +166,7 @@ All items from the original open-questions list (formerly §7 items 1–9) are f
 
 #### 2. Single-Session Conflict User Experience (Replaces Item 2 / REQ-ACC-03)
 - **Resolution:** The user session conflict handler is explicitly defined.
-- **Implementation:** The moment a concurrent session mismatch is detected by the middleware, the system immediately runs `request.session.flush()`, executes a clean Django `logout()`, and terminates the request by returning a strict redirect to `/login/?error=session_conflict`.
+- **Implementation:** The moment a concurrent session mismatch is detected by the middleware, the system immediately runs `request.session.flush()`, executes a clean Django `logout()`, and terminates the request by returning a strict redirect to `/accounts/login/?error=session_conflict` (route corrected this pass, DECISIONS.md D17 — allauth's mounted login route, not a separate `/login/` path).
 - **Applied in:** ARCHITECTURE.md §3.2, REQ-ACC-03 below.
 
 #### 3. Student Profile Fields Framework (Replaces Item 5 / REQ-DASH-04)
