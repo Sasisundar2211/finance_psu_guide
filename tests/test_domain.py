@@ -137,7 +137,8 @@ class ModelInventoryTests(TestCase):
 class UserProfileTests(TestCase):
     def test_one_profile_maximum_per_user(self):
         user = make_user()
-        UserProfile.objects.create(user=user)
+        # Phase 3's post_save hook already created this user's profile.
+        self.assertTrue(UserProfile.objects.filter(user=user).exists())
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 UserProfile.objects.create(user=user)
