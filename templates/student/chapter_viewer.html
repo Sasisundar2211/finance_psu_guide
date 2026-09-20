@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}{{ chapter.title }} — {{ course.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <nav aria-label="breadcrumb" class="d-print-none">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'my_courses' %}">My Courses</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'course_library' course.pk %}">{{ course.title }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ chapter.title }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-1">{{ chapter.title }}</h1>
+    <p class="text-body-secondary small">{{ book.title }} &middot; {{ course.title }}</p>
+
+    {% if has_pdf %}
+    <div id="pdf-viewer"
+         class="bg-body"
+         data-signed-url="{% url 'chapter_signed_url' chapter.pk %}"
+         data-worker-src="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs">
+        <div class="pdf-toolbar d-print-none d-flex flex-wrap align-items-center gap-2 border rounded bg-body-tertiary p-2 mb-2"
+             role="toolbar" aria-label="Study material controls">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-prev" disabled>Previous</button>
+            <span class="small" aria-live="polite">Page <span id="pdf-page-num">&ndash;</span> / <span id="pdf-page-count">&ndash;</span></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-next" disabled>Next</button>
+            <span class="vr mx-1"></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-zoom-out" disabled>Zoom out</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-zoom-in" disabled>Zoom in</button>
+            <span class="vr mx-1"></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-fullscreen" disabled>Fullscreen</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pdf-print" disabled>Print</button>
+        </div>
+        <div id="pdf-status" class="alert alert-secondary d-print-none" role="status">Loading study material&hellip;</div>
+        <div id="pdf-stage" class="overflow-auto border rounded bg-body-secondary p-2">
+            <canvas id="pdf-canvas" role="img" aria-label="Study material page"></canvas>
+        </div>
+        <noscript><p class="alert alert-warning mt-2">JavaScript is required to read study material.</p></noscript>
+    </div>
+
+    <style>
+        #pdf-canvas { display: block; margin: 0 auto; background: #fff; }
+        #pdf-viewer:fullscreen { display: flex; flex-direction: column; padding: .5rem; }
+        #pdf-viewer:fullscreen #pdf-stage { flex: 1 1 auto; }
+        @media print { header, footer { display: none !important; } #pdf-stage { border: 0 !important; padding: 0 !important; overflow: visible !important; } #pdf-canvas { max-width: 100%; height: auto; } }
+    </style>
+
+    {# Pinned PDF.js 6.3.289 (jsDelivr). Loaded only on this page; SRI covers the main bundle. #}
+    <script type="module"
+            src="https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.min.mjs"
+            integrity="sha384-z3N/QnTq7KUG0r5jEmpE9EQ2Yw9XQxeHTtq/XWs9uR7UDmdiZAI2xGZ7t151ou8z"
+            crossorigin="anonymous"></script>
+    <script type="module">
+{% verbatim %}
+// Chapter reader (REQ-COURSE-02/03, API.md §3, DECISIONS.md D11.4/D15).
+// Loading model: ask Django for a 60-second URL, make ONE complete GET of that
+// URL, keep the bytes in memory and give PDF.js the bytes (never the URL).
+// Every page, zoom and fullscreen action afterwards works from memory.
+const viewer = document.getElementById("pdf-viewer");
+const stage = document.getElementById("pdf-stage");
+const canvas = document.getElementById("pdf-canvas");
+const statusBox = document.getElementById("pdf-status");
+const prevButton = document.getElementById("pdf-prev");
+const nextButton = document.getElementById("pdf-next");
+const zoomOutButton = document.getElementById("pdf-zoom-out");
+const zoomInButton = document.getElementById("pdf-zoom-in");
+const fullscreenButton = document.getElementById("pdf-fullscreen");
+const printButton = document.getElementById("pdf-print");
+const pageNumLabel = document.getElementById("pdf-page-num");
+const pageCountLabel = document.getElementById("pdf-page-count");
+
+const ZOOM_STEP = 1.25;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
+
+let pdfDoc = null;
+let pageNum = 1;
+let scale = 1;
+let rendering = false;
+let renderAgain = false;
+
+class ViewerError extends Error {}
+
+function showStatus(message, isError) {
+  statusBox.hidden = false;
+  statusBox.className = "alert d-print-none " + (isError ? "alert-danger" : "alert-secondary");
+  statusBox.textContent = message;
+}
+
+function updateControls() {
+  const loaded = pdfDoc !== null;
+  prevButton.disabled = !loaded || pageNum <= 1;
+  nextButton.disabled = !loaded || pageNum >= pdfDoc.numPages;
+  zoomOutButton.disabled = !loaded || scale <= MIN_SCALE;
+  zoomInButton.disabled = !loaded || scale >= MAX_SCALE;
+  fullscreenButton.disabled = !loaded || typeof viewer.requestFullscreen !== "function";
+  printButton.disabled = !loaded;
+  pageNumLabel.textContent = loaded ? String(pageNum) : "–";
+  pageCountLabel.textContent = loaded ? String(pdfDoc.numPages) : "–";
+}
+
+// Ask Django for a fresh URL. Failures here (no access, no PDF yet, session
+// ended, server trouble) are final: they are not R2 failures and are not retried.
+async function requestSignedUrl() {
+  let response;
+  try {
+    response = await fetch(viewer.dataset.signedUrl, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ViewerError("Could not reach the server. Check your connection and reload the page.");
+  }
+  if (response.redirected) {
+    throw new ViewerError("Your session has ended. Please log in again.");
+  }
+  if (response.status === 403) {
+    throw new ViewerError("You do not have access to this study material.");
+  }
+  if (response.status === 404) {
+    throw new ViewerError("This study material is not available yet.");
+  }
+  if (!response.ok) {
+    throw new ViewerError("The study material is temporarily unavailable. Please try again shortly.");
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  if (!body || typeof body.url !== "string" || body.url === "") {
+    throw new ViewerError("The study material is temporarily unavailable. Please try again shortly.");
+  }
+  return body.url;
+}
+
+// One complete, ordinary GET of the presigned URL. A non-2xx answer is never
+// read as PDF data.
+async function fetchPdfBytes(url) {
+  const response = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer" });
+  if (!response.ok) {
+    throw new Error("The complete fetch failed.");
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+// Signed URL #1 + fetch #1; only if that fetch fails before the bytes are
+// loaded, signed URL #2 + fetch #2. Exactly two attempts at most, no more.
+async function loadPdfBytes() {
+  const firstUrl = await requestSignedUrl();
+  try {
+    return await fetchPdfBytes(firstUrl);
+  } catch {
+    const secondUrl = await requestSignedUrl();
+    return await fetchPdfBytes(secondUrl);
+  }
+}
+
+// Render the current page/zoom from the in-memory document. A request that
+// arrives mid-render is coalesced, so two renders never share the canvas.
+async function renderPage() {
+  if (rendering) {
+    renderAgain = true;
+    return;
+  }
+  rendering = true;
+  try {
+    do {
+      renderAgain = false;
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale });
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * ratio);
+      canvas.height = Math.floor(viewport.height * ratio);
+      canvas.style.width = Math.floor(viewport.width) + "px";
+      canvas.setAttribute("aria-label", "Page " + pageNum + " of " + pdfDoc.numPages);
+      await page.render({
+        canvasContext: canvas.getContext("2d"),
+        viewport,
+        transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0],
+      }).promise;
+    } while (renderAgain);
+    statusBox.hidden = true;
+  } catch {
+    showStatus("This page could not be displayed. Try another page or reload.", true);
+  } finally {
+    rendering = false;
+    updateControls();
+  }
+}
+
+function goToPage(target) {
+  if (!pdfDoc || target < 1 || target > pdfDoc.numPages) {
+    return;
+  }
+  pageNum = target;
+  updateControls();
+  renderPage();
+}
+
+function zoomBy(factor) {
+  if (!pdfDoc) {
+    return;
+  }
+  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+  updateControls();
+  renderPage();
+}
+
+prevButton.addEventListener("click", () => goToPage(pageNum - 1));
+nextButton.addEventListener("click", () => goToPage(pageNum + 1));
+zoomOutButton.addEventListener("click", () => zoomBy(1 / ZOOM_STEP));
+zoomInButton.addEventListener("click", () => zoomBy(ZOOM_STEP));
+
+fullscreenButton.addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await viewer.requestFullscreen();
+    }
+  } catch {
+    // Unsupported or refused: the reader keeps working as it was.
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  fullscreenButton.textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+});
+
+// Normal browser printing: nothing intercepts or alters it (DECISIONS.md D15).
+printButton.addEventListener("click", () => window.print());
+
+async function start() {
+  const pdfjsLib = globalThis.pdfjsLib;
+  if (!pdfjsLib) {
+    showStatus("The reader could not be loaded. Check your connection and reload the page.", true);
+    return;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = viewer.dataset.workerSrc;
+  try {
+    const bytes = await loadPdfBytes();
+    pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  } catch (error) {
+    showStatus(
+      error instanceof ViewerError
+        ? error.message
+        : "The study material could not be loaded. Please reload the page to try again.",
+      true
+    );
+    return;
+  }
+  try {
+    // Fit the first page to the reading area; every page then uses that zoom.
+    const firstPage = await pdfDoc.getPage(1);
+    const fitWidth = (stage.clientWidth - 24) / firstPage.getViewport({ scale: 1 }).width;
+    if (fitWidth > 0) {
+      scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, fitWidth));
+    }
+  } catch {
+    // Keep the default zoom; renderPage reports any real problem.
+  }
+  updateControls();
+  renderPage();
+}
+
+updateControls();
+start();
+{% endverbatim %}
+    </script>
+    {% else %}
+    <div class="alert alert-info" id="pdf-unavailable">This study material has not been uploaded yet. Please check back later.</div>
+    {% endif %}
+</main>
+{% endblock %}

@@ -1,5 +1,9 @@
-from django.contrib import admin
+import logging
 
+from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+
+from core.forms import ChapterAdminForm
 from core.models import (
     Attempt,
     AttemptAnswer,
@@ -18,6 +22,9 @@ from core.models import (
     UserChapterProgress,
     UserProfile,
 )
+from core.r2 import R2Error, upload_chapter_pdf
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(UserProfile)
@@ -49,6 +56,8 @@ class PricingPlanAdmin(admin.ModelAdmin):
 class ChapterInline(admin.TabularInline):
     model = Chapter
     extra = 0
+    # The raw PDF key is not editable; PDFs are uploaded on the Chapter form.
+    fields = ("title", "order")
 
 
 @admin.register(Book)
@@ -62,10 +71,38 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(Chapter)
 class ChapterAdmin(admin.ModelAdmin):
-    list_display = ("book", "title", "order")
+    form = ChapterAdminForm
+    list_display = ("book", "title", "order", "has_pdf")
     list_filter = ("book__course",)
     search_fields = ("title", "book__title")
     ordering = ("book", "order")
+    readonly_fields = ("has_pdf",)
+
+    @admin.display(boolean=True, description="PDF uploaded")
+    def has_pdf(self, obj):
+        return bool(obj and obj.pdf_object_key)
+
+    def save_model(self, request, obj, form, change):
+        """API.md §7: after the row exists, upload the PDF server-side and store only its key."""
+        super().save_model(request, obj, form, change)
+        upload = form.cleaned_data.get("pdf_file")
+        if upload:
+            obj.pdf_object_key = upload_chapter_pdf(obj.pk, upload)
+            obj.save(update_fields=["pdf_object_key"])
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # The admin saves inside one transaction, so an R2 failure raised from
+        # save_model rolls the whole save back. Report it instead of a false success.
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except R2Error as exc:
+            logger.error("Chapter PDF upload failed: %s", exc)
+            self.message_user(
+                request,
+                "The PDF could not be uploaded to storage, so nothing was saved. Please try again.",
+                messages.ERROR,
+            )
+            return HttpResponseRedirect(request.get_full_path())
 
 
 @admin.register(UserChapterProgress)

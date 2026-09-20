@@ -22,9 +22,12 @@
             {% if book.chapters.all %}
             <ul class="list-group list-group-flush">
                 {% for chapter in book.chapters.all %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
+                <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
                     <span>{{ chapter.title }}</span>
-                    {% if chapter.pk in completed_ids %}<span class="badge text-bg-success">Completed</span>{% endif %}
+                    <span class="d-flex align-items-center gap-2">
+                        {% if chapter.pk in completed_ids %}<span class="badge text-bg-success">Completed</span>{% endif %}
+                        <a class="btn btn-sm btn-outline-primary" href="{% url 'chapter_viewer' chapter.pk %}">Open study material</a>
+                    </span>
                 </li>
                 {% endfor %}
             </ul>
@@ -35,7 +38,6 @@
         {% empty %}
         <p class="text-body-secondary" id="books-empty">No books have been added to this course yet.</p>
         {% endfor %}
-        <p class="small text-body-secondary">The study material viewer is coming soon.</p>
     </section>
 
     <section aria-labelledby="included-tests-heading">

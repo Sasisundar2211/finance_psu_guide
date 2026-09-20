@@ -375,7 +375,6 @@ class CourseLibraryTests(StudentTestCase):
         html = self.get("course_library", self.course.pk).content.decode()
         for forbidden in ("private/secret-key.pdf", "pdf_object_key", "signed-url", "X-Amz"):
             self.assertNotIn(forbidden, html)
-        self.assertEqual(self.client.get("/library/chapter/1/signed-url/").status_code, 404)
 
     def test_browsing_writes_no_progress(self):
         enroll(self.alice, self.course)
