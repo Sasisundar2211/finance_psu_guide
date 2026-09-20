@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}My Mock Tests — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">My Mock Tests</h1>
+    {% if enrollments %}
+    <ul class="list-group">
+        {% for row in enrollments %}
+        <li class="list-group-item d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                {% if row.mock_test.is_published %}
+                <a href="{% url 'mock_test_detail' row.mock_test.pk %}">{{ row.mock_test.title }}</a>
+                {% else %}
+                <span>{{ row.mock_test.title }}</span>
+                <span class="badge text-bg-secondary">Currently unavailable</span>
+                {% endif %}
+                <div class="small text-body-secondary">
+                    {{ row.mock_test.duration_minutes }} minute{{ row.mock_test.duration_minutes|pluralize }}
+                    &middot; Purchased {{ row.purchased_at|date:"j F Y" }}
+                </div>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    <p class="small text-body-secondary mt-2">Taking a mock test is coming soon.</p>
+    {% else %}
+    <p class="text-body-secondary" id="mock-tests-empty">You haven't purchased a mock test yet. <a href="{% url 'mock_test_list' %}">Browse mock tests</a></p>
+    {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'my_courses' %}">My Courses</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ course.title }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3">{{ course.title }}</h1>
+    <p class="small" id="course-progress">{{ progress.completed }} of {{ progress.total }} chapter{{ progress.total|pluralize }} completed ({{ progress.percent }}%)</p>
+
+    <section class="mb-4" aria-labelledby="books-heading">
+        <h2 class="h5" id="books-heading">Books</h2>
+        {% for book in books %}
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">{{ book.title }}</div>
+            {% if book.chapters.all %}
+            <ul class="list-group list-group-flush">
+                {% for chapter in book.chapters.all %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ chapter.title }}</span>
+                    {% if chapter.pk in completed_ids %}<span class="badge text-bg-success">Completed</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="card-body text-body-secondary">No chapters have been added to this book yet.</div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-body-secondary" id="books-empty">No books have been added to this course yet.</p>
+        {% endfor %}
+        <p class="small text-body-secondary">The study material viewer is coming soon.</p>
+    </section>
+
+    <section aria-labelledby="included-tests-heading">
+        <h2 class="h5" id="included-tests-heading">Included mock tests</h2>
+        {% if mock_tests %}
+        <ul class="list-group">
+            {% for link in mock_tests %}
+            <li class="list-group-item d-flex justify-content-between">
+                <a href="{% url 'mock_test_detail' link.mock_test.pk %}">{{ link.mock_test.title }}</a>
+                <span class="small text-body-secondary">{{ link.mock_test.duration_minutes }} minute{{ link.mock_test.duration_minutes|pluralize }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="small text-body-secondary mt-2">These are included with your course. Taking a mock test is coming soon.</p>
+        {% else %}
+        <p class="text-body-secondary" id="included-tests-empty">No mock tests are included with this course.</p>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}
