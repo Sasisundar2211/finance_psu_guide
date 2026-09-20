@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}No access — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3">You don't have access to this course</h1>
+    <p>Your account has no active access to the course you requested.</p>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="{% url 'my_courses' %}">My Courses</a>
+        <a class="btn btn-outline-secondary" href="{% url 'course_list' %}">Browse courses</a>
+    </div>
+</main>
+{% endblock %}

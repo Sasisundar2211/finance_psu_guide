@@ -44,6 +44,23 @@
                             <a class="nav-link" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Support</a>
                         </li>
                         {% endif %}
+                        {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link{% if current == 'dashboard' %} active{% endif %}"
+                               href="{% url 'dashboard' %}"
+                               {% if current == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link{% if current == 'my_courses' or current == 'course_library' %} active{% endif %}"
+                               href="{% url 'my_courses' %}"
+                               {% if current == 'my_courses' or current == 'course_library' %}aria-current="page"{% endif %}>My Courses</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link{% if current == 'my_mock_tests' %} active{% endif %}"
+                               href="{% url 'my_mock_tests' %}"
+                               {% if current == 'my_mock_tests' %}aria-current="page"{% endif %}>My Mock Tests</a>
+                        </li>
+                        {% endif %}
                     </ul>
                     <ul class="navbar-nav mb-2 mb-lg-0 align-items-lg-center">
                         {% if user.is_authenticated %}
@@ -51,6 +68,7 @@
                             <a class="nav-link dropdown-toggle" href="#" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">{{ user.get_username }}</a>
                             <ul class="dropdown-menu dropdown-menu-lg-end">
+                                <li><a class="dropdown-item" href="{% url 'profile' %}">Profile</a></li>
                                 <li><a class="dropdown-item" href="{% url 'account_email' %}">Email addresses</a></li>
                                 <li><a class="dropdown-item" href="{% url 'account_change_password' %}">Change password</a></li>
                                 <li><hr class="dropdown-divider"></li>

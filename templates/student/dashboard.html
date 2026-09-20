@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">Dashboard</h1>
+
+    <section class="mb-4" aria-labelledby="recent-heading">
+        <h2 class="h5" id="recent-heading">Recently accessed course</h2>
+        {% if recent_course %}
+        <p class="mb-1" id="recent-course">{{ recent_course.title }}</p>
+        <a class="btn btn-primary btn-sm" href="{% url 'course_library' recent_course.pk %}">Continue Learning</a>
+        {% else %}
+        <p class="text-body-secondary" id="recent-empty">You haven't opened any course material yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="mb-4" aria-labelledby="courses-heading">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h2 class="h5 mb-0" id="courses-heading">My Courses</h2>
+            <a href="{% url 'my_courses' %}">All my courses</a>
+        </div>
+        <p class="small text-body-secondary" id="chapters-completed">Chapters completed in active courses: {{ chapters_completed }}</p>
+        {% if courses %}
+        <div class="list-group">
+            {% for item in courses %}{% include "student/_course_row.html" %}{% endfor %}
+        </div>
+        {% else %}
+        <p class="text-body-secondary" id="courses-empty">You haven't purchased a course yet. <a href="{% url 'course_list' %}">Browse courses</a></p>
+        {% endif %}
+    </section>
+
+    <section class="mb-4" aria-labelledby="purchased-tests-heading">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h2 class="h5 mb-0" id="purchased-tests-heading">Purchased mock tests</h2>
+            <a href="{% url 'my_mock_tests' %}">All my mock tests</a>
+        </div>
+        {% if standalone_tests %}
+        <ul class="list-group">
+            {% for row in standalone_tests %}<li class="list-group-item">{{ row.mock_test.title }}</li>{% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-body-secondary" id="purchased-tests-empty">You haven't purchased a mock test yet. <a href="{% url 'mock_test_list' %}">Browse mock tests</a></p>
+        {% endif %}
+    </section>
+
+    <section class="mb-4" aria-labelledby="available-heading">
+        <h2 class="h5" id="available-heading">Available mock tests</h2>
+        <p class="small text-body-secondary">Mock tests you can access through a purchase or an active course.</p>
+        {% if available_tests %}
+        <ul class="list-group">
+            {% for mock_test in available_tests %}
+            <li class="list-group-item d-flex justify-content-between">
+                <a href="{% url 'mock_test_detail' mock_test.pk %}">{{ mock_test.title }}</a>
+                <span class="small text-body-secondary">{{ mock_test.duration_minutes }} minute{{ mock_test.duration_minutes|pluralize }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-body-secondary" id="available-empty">No mock tests are available to you right now.</p>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

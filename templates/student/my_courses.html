@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}My Courses — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">My Courses</h1>
+    {% if courses %}
+    <div class="list-group">
+        {% for item in courses %}{% include "student/_course_row.html" %}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-body-secondary" id="courses-empty">You haven't purchased a course yet. <a href="{% url 'course_list' %}">Browse courses</a></p>
+    {% endif %}
+</main>
+{% endblock %}

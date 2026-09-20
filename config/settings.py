@@ -115,6 +115,7 @@ ACCOUNT_SIGNUP_FIELDS = [
     "password2*",
 ]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+LOGIN_REDIRECT_URL = "dashboard"
 
 # ---------------------------------------------------------------------------
 # django-allauth — Google provider (SECURITY.md §3, DECISIONS.md D14)
