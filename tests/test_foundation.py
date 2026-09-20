@@ -133,16 +133,19 @@ class RouteResolutionTests(TestCase):
 
 
 class HomeTemplateTests(TestCase):
-    def test_google_action_is_post_form_not_get_link(self):
+    def test_anonymous_home_links_to_auth_pages_without_google_action(self):
+        # SECURITY.md §9: the anonymous home is public/edge-cacheable, so it
+        # carries no CSRF form. "Continue with Google" (REQ-ACC-04/REQ-WEB-07)
+        # lives on the login/signup pages only (POST-only, see test_auth.py);
+        # home just links to those named routes.
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        google_login_url = reverse("google_login")
-        # The Google action must be a POST <form>, never a plain <a href> link.
-        # provider_login_url appends ?process=login, so match by prefix.
-        self.assertIn(f'action="{google_login_url}?process=login"', content)
-        self.assertIn("<form", content)
-        self.assertNotIn(f'href="{google_login_url}', content)
+        self.assertIn(f'href="{reverse("account_login")}"', content)
+        self.assertIn(f'href="{reverse("account_signup")}"', content)
+        self.assertNotIn(reverse("google_login"), content)
+        self.assertNotIn("<form", content)
+        self.assertNotIn("csrfmiddlewaretoken", content)
 
 
 class DevelopmentEmailBackendTests(TestCase):

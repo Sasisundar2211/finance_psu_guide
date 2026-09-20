@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load public_extras %}
+
+{% block title %}{{ course.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'course_list' %}">Courses</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ course.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <h1 class="h3">{{ course.title }}</h1>
+            {% if course.thumbnail %}
+            <img src="{{ course.thumbnail }}" class="img-fluid rounded mb-3" alt="">
+            {% endif %}
+            <div class="mb-4">{{ course.full_description|linebreaks }}</div>
+
+            {% if course.subjects_covered %}
+            <h2 class="h5">Subjects covered</h2>
+            <ul>
+                {% for subject in course.subjects_covered %}<li>{{ subject }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+
+            <h2 class="h5">What's included</h2>
+            <ul>
+                <li>{{ course.chapter_count }} chapter{{ course.chapter_count|pluralize }}</li>
+                <li>{{ course.mcq_count }} practice MCQ{{ course.mcq_count|pluralize }}</li>
+                <li>{{ course.mock_test_count }} mock test{{ course.mock_test_count|pluralize }}</li>
+            </ul>
+        </div>
+
+        <aside class="col-lg-4" aria-label="Pricing">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Validity &amp; pricing</h2>
+                    {% with plans=course.pricing_plans.all %}
+                    {% if plans %}
+                    {# REQ-WEB-04: plans and prices are server-rendered from price_paise; the script below only swaps in the pre-formatted price of the selected plan. #}
+                    <fieldset class="mb-3" id="plan-selector">
+                        <legend class="h6">Choose validity</legend>
+                        {% for plan in plans %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="plan"
+                                   id="plan-{{ plan.pk }}" value="{{ plan.pk }}"
+                                   data-price-display="{{ plan.price_paise|inr }}"{% if forloop.first %} checked{% endif %}>
+                            <label class="form-check-label d-flex justify-content-between" for="plan-{{ plan.pk }}">
+                                <span>{{ plan.duration_months }} months</span>
+                                <span class="fw-semibold">{{ plan.price_paise|inr }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </fieldset>
+                    <p class="mb-3">Selected price:
+                        <strong class="fs-5" id="selected-price" aria-live="polite">{{ plans.0.price_paise|inr }}</strong>
+                    </p>
+                    {% else %}
+                    <p class="text-body-secondary">Pricing is not available yet.</p>
+                    {% endif %}
+                    {% endwith %}
+
+                    {% include "courses/_enroll_cta.html" with block_class="w-100" %}
+                    {% if not user.is_authenticated %}
+                    <p class="small text-body-secondary mt-2 mb-2">You will be asked to log in or create an account first.</p>
+                    <a class="btn btn-outline-secondary w-100" href="{% url 'account_signup' %}?next={{ request.path|urlencode }}">Create an account</a>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</main>
+
+{% if course.pricing_plans.all %}
+<script>
+(function () {
+    var out = document.getElementById("selected-price");
+    if (!out) return;
+    document.querySelectorAll('#plan-selector input[name="plan"]').forEach(function (radio) {
+        radio.addEventListener("change", function () {
+            out.textContent = radio.dataset.priceDisplay;
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

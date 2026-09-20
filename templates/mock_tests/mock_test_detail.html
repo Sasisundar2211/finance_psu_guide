@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load public_extras %}
+
+{% block title %}{{ mock_test.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'mock_test_list' %}">Mock Tests</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ mock_test.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <h1 class="h3">{{ mock_test.title }}</h1>
+            {% if mock_test.description %}
+            <div class="mb-4">{{ mock_test.description|linebreaks }}</div>
+            {% endif %}
+            <p>Duration: {{ mock_test.duration_minutes }} minute{{ mock_test.duration_minutes|pluralize }}</p>
+        </div>
+
+        <aside class="col-lg-4" aria-label="Pricing">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Pricing</h2>
+                    {% if mock_test.pricing_plans.all %}
+                    <ul class="list-unstyled fw-semibold mb-3">
+                        {% for plan in mock_test.pricing_plans.all %}<li>{{ plan.price_paise|inr }}</li>{% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-body-secondary">Pricing is not available yet.</p>
+                    {% endif %}
+
+                    {% if not user.is_authenticated %}
+                    <p class="small mb-2">Log in or create an account to continue.</p>
+                    <a class="btn btn-primary w-100 mb-2" href="{% url 'account_login' %}?next={{ request.path|urlencode }}">Log in</a>
+                    <a class="btn btn-outline-secondary w-100" href="{% url 'account_signup' %}?next={{ request.path|urlencode }}">Create an account</a>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+    </div>
+</main>
+{% endblock %}

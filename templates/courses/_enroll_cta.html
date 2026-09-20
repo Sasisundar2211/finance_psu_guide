@@ -1,0 +1,17 @@
+{% comment %}
+  PHASE 5/8 BOUNDARY (REQ-WEB-03/04/07): the only place the Enroll Now CTA is decided.
+  Phase 4 renders the required CTA but implements no checkout, Order, Enrollment or
+  payment behavior. Replace this partial when the real enrollment flow lands.
+  Expects: course. Optional: block_class (e.g. "w-100").
+{% endcomment %}
+{% url 'course_detail' course.pk as detail_url %}
+<div>
+    {% if user.is_authenticated %}
+    <button type="button" class="btn btn-primary {{ block_class }}" disabled aria-disabled="true"
+            data-enroll-state="unavailable">Enroll Now</button>
+    <span class="d-block small text-body-secondary mt-1">Online enrollment is not open yet.</span>
+    {% else %}
+    <a class="btn btn-primary {{ block_class }}" data-enroll-state="login"
+       href="{% url 'account_login' %}?next={{ detail_url|urlencode }}">Enroll Now</a>
+    {% endif %}
+</div>

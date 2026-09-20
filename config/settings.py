@@ -50,6 +50,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.support_link",
             ],
         },
     },
@@ -96,6 +97,10 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+
+# Support/Chat destination (REQ-WEB-02). The client's WhatsApp link is not
+# frozen in /docs, so it is environment-only and the nav renders nothing until set.
+WHATSAPP_SUPPORT_URL = os.environ.get("WHATSAPP_SUPPORT_URL", "").strip()
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

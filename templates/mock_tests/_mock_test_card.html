@@ -1,0 +1,19 @@
+{% load public_extras %}
+<div class="col">
+    <article class="card h-100">
+        <div class="card-body d-flex flex-column">
+            <h3 class="h5 card-title">
+                <a class="stretched-link text-decoration-none" href="{% url 'mock_test_detail' mock_test.pk %}">{{ mock_test.title }}</a>
+            </h3>
+            {% if mock_test.description %}
+            <p class="card-text">{{ mock_test.description|truncatewords:30 }}</p>
+            {% endif %}
+            <ul class="list-unstyled small text-body-secondary mt-auto mb-0">
+                <li>Duration: {{ mock_test.duration_minutes }} minute{{ mock_test.duration_minutes|pluralize }}</li>
+                {% if mock_test.starting_price_paise is not None %}
+                <li class="fw-semibold text-body">{{ mock_test.starting_price_paise|inr }}</li>
+                {% endif %}
+            </ul>
+        </div>
+    </article>
+</div>

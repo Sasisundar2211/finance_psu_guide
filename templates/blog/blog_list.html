@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Blog — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">Blog</h1>
+    {% if posts %}
+    <div class="list-group list-group-flush">
+        {% for post in posts %}
+        <article class="list-group-item px-0">
+            <h2 class="h5 mb-1"><a href="{% url 'blog_detail' post.slug %}">{{ post.title }}</a></h2>
+            <p class="small text-body-secondary mb-1">
+                <time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"j F Y" }}</time>
+            </p>
+            <p class="mb-0">{{ post.body|truncatewords:40 }}</p>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-body-secondary" id="blog-empty">No posts have been published yet.</p>
+    {% endif %}
+</main>
+{% endblock %}
