@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Courses — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">Courses</h1>
+    {% if courses %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for course in courses %}{% include "courses/_course_card.html" %}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-body-secondary" id="courses-empty">No courses are available right now. Please check back soon.</p>
+    {% endif %}
+</main>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4" style="max-width: 46rem;">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'blog_list' %}">Blog</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ post.title }}</li>
+        </ol>
+    </nav>
+    <article>
+        <h1 class="h3">{{ post.title }}</h1>
+        <p class="small text-body-secondary">
+            <time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"j F Y" }}</time>
+        </p>
+        <div>{{ post.body|linebreaks }}</div>
+    </article>
+</main>
+{% endblock %}

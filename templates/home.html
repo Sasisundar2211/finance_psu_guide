@@ -1,19 +1,84 @@
 {% extends "base.html" %}
-{% load socialaccount %}
 
-{% block title %}Finance PSU — Foundation{% endblock %}
+{% block title %}Finance PSU Guide{% endblock %}
 
 {% block content %}
-<h1>Finance PSU</h1>
+<main>
+    <section class="bg-body-tertiary border-bottom py-5">
+        <div class="container">
+            <h1 class="display-6 fw-semibold">Finance PSU Guide</h1>
+            <p class="lead mb-4">Courses and mock tests for PSU and government accounting exam preparation.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="{% url 'course_list' %}">Browse courses</a>
+                <a class="btn btn-outline-primary" href="{% url 'mock_test_list' %}">Browse mock tests</a>
+            </div>
+        </div>
+    </section>
 
-<nav>
-    <a href="{% url 'account_login' %}">Login</a>
-    <a href="{% url 'account_signup' %}">Signup</a>
-    <a href="{% url 'account_reset_password' %}">Forgot password?</a>
-</nav>
+    {% if not user.is_authenticated %}
+    <section class="container py-4" aria-labelledby="account-heading">
+        <h2 class="h5" id="account-heading">Get started</h2>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <a class="btn btn-primary" href="{% url 'account_signup' %}">Sign up</a>
+            <a class="btn btn-outline-secondary" href="{% url 'account_login' %}">Login</a>
+        </div>
+    </section>
+    {% endif %}
 
-<form method="post" action="{% provider_login_url 'google' process='login' %}">
-    {% csrf_token %}
-    <button type="submit">Continue with Google</button>
-</form>
+    <section class="container py-4" aria-labelledby="courses-heading">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <h2 class="h4 mb-0" id="courses-heading">Courses</h2>
+            <a href="{% url 'course_list' %}">All courses</a>
+        </div>
+        {% if courses %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for course in courses %}{% include "courses/_course_card.html" %}{% endfor %}
+        </div>
+        {% else %}
+        <p class="text-body-secondary" id="courses-empty">No courses are available right now. Please check back soon.</p>
+        {% endif %}
+    </section>
+
+    <section class="container py-4" aria-labelledby="mock-tests-heading">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <h2 class="h4 mb-0" id="mock-tests-heading">Mock tests</h2>
+            <a href="{% url 'mock_test_list' %}">All mock tests</a>
+        </div>
+        {% if mock_tests %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for mock_test in mock_tests %}{% include "mock_tests/_mock_test_card.html" %}{% endfor %}
+        </div>
+        {% else %}
+        <p class="text-body-secondary" id="mock-tests-empty">No mock tests are available right now. Please check back soon.</p>
+        {% endif %}
+    </section>
+
+    <section class="container py-4" aria-labelledby="blog-heading">
+        <div class="d-flex justify-content-between align-items-baseline mb-3">
+            <h2 class="h4 mb-0" id="blog-heading">Latest from the blog</h2>
+            <a href="{% url 'blog_list' %}">All posts</a>
+        </div>
+        {% if posts %}
+        <div class="list-group list-group-flush">
+            {% for post in posts %}
+            <article class="list-group-item px-0">
+                <h3 class="h6 mb-1"><a href="{% url 'blog_detail' post.slug %}">{{ post.title }}</a></h3>
+                <p class="small text-body-secondary mb-0">
+                    <time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"j F Y" }}</time>
+                </p>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-body-secondary" id="blog-empty">No posts have been published yet.</p>
+        {% endif %}
+    </section>
+
+    {% if support_url %}
+    <section class="container py-4" aria-labelledby="support-heading">
+        <h2 class="h5" id="support-heading">Need help?</h2>
+        <a class="btn btn-outline-success" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Chat with support</a>
+    </section>
+    {% endif %}
+</main>
 {% endblock %}

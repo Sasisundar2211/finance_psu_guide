@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Mock Tests — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3 mb-4">Mock Tests</h1>
+    {% if mock_tests %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for mock_test in mock_tests %}{% include "mock_tests/_mock_test_card.html" %}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-body-secondary" id="mock-tests-empty">No mock tests are available right now. Please check back soon.</p>
+    {% endif %}
+</main>
+{% endblock %}
