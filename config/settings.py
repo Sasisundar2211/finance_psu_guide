@@ -102,6 +102,13 @@ STATIC_URL = "static/"
 # frozen in /docs, so it is environment-only and the nav renders nothing until set.
 WHATSAPP_SUPPORT_URL = os.environ.get("WHATSAPP_SUPPORT_URL", "").strip()
 
+# Private Cloudflare R2 bucket for chapter PDFs (API.md §3/§7, SECURITY.md §2).
+# Environment-only; when unset, core.r2 fails closed and no URL is ever produced.
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
+R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "").strip()
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------

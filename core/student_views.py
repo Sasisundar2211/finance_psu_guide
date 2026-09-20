@@ -1,20 +1,22 @@
-"""Phase 5 student area: dashboard, My Courses, course library, My Mock Tests, Profile.
+"""Student area: dashboard, My Courses, course library, chapter reader, My Mock Tests, Profile.
 
-REQ-DASH-01..04, REQ-COURSE-01/04, REQ-MOCK-05, DECISIONS.md D11.5.
+REQ-DASH-01..04, REQ-COURSE-01..04, REQ-MOCK-05, DECISIONS.md D11.4/D11.5.
 
 Everything here is per-student, so every response is private/no-store
 (SECURITY.md §9) and every course/mock-test decision goes through
-`core.access`. These views only *read* Enrollment, MockTestEnrollment,
-UserChapterProgress and CourseMockTest; nothing here grants access, records
-progress, or starts an attempt (Phases 6-8).
+`core.access`. The only writes are `chapter_signed_url` recording chapter
+progress after a successful entitled PDF access (API.md §3); nothing here
+grants access or starts an attempt (Phases 7-8).
 """
 
+import logging
 from functools import wraps
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.db.models.query import Prefetch
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
@@ -30,6 +32,9 @@ from .models import (
     MockTestEnrollment,
     UserChapterProgress,
 )
+from .r2 import PRESIGNED_URL_EXPIRY_SECONDS, R2Error, presign_pdf_get
+
+logger = logging.getLogger(__name__)
 
 
 def student_page(methods=("GET", "HEAD")):
@@ -180,7 +185,7 @@ def course_library(request, pk):
 
     An unknown id and an un-entitled id get the identical 403 page, so the
     response reveals nothing about the course or its hierarchy. Chapters are
-    loaded without `pdf_object_key`; PDF access is Phase 6.
+    loaded without `pdf_object_key`; they link to the chapter reader.
     """
     course = Course.objects.filter(pk=pk).first()
     if course is None or not can_access_course(request.user, course):
@@ -215,6 +220,71 @@ def course_library(request, pk):
             "mock_tests": mock_tests,
         },
     )
+
+
+def entitled_chapter(user, chapter_id):
+    """The Chapter (with its Book and Course) if `user` has active access to its course.
+
+    One bounded query for the chapter hierarchy plus the shared
+    `can_access_course` check. An unknown id and an un-entitled id both return
+    None, so callers cannot distinguish them. Entitlement is never decided from
+    the chapter id alone.
+    """
+    chapter = Chapter.objects.select_related("book__course").filter(pk=chapter_id).first()
+    if chapter is None or not can_access_course(user, chapter.book.course):
+        return None
+    return chapter
+
+
+@student_page()
+def chapter_viewer(request, chapter_id):
+    """REQ-COURSE-02: the in-site PDF reader page for one chapter.
+
+    The page carries no PDF URL and no object key, and opening it records no
+    progress. The browser asks `chapter_signed_url` for a URL after this loads.
+    """
+    chapter = entitled_chapter(request.user, chapter_id)
+    if chapter is None:
+        return render(request, "student/access_denied.html", status=403)
+    return render(
+        request,
+        "student/chapter_viewer.html",
+        {
+            "chapter": chapter,
+            "book": chapter.book,
+            "course": chapter.book.course,
+            "has_pdf": bool(chapter.pdf_object_key),
+        },
+    )
+
+
+@student_page(("GET",))
+def chapter_signed_url(request, chapter_id):
+    """API.md §3: hand an entitled student a 60-second presigned R2 URL.
+
+    Order matters: entitlement, then the PDF key, then presigning, and only a
+    successful presign records progress (D11.4). Every failure returns a
+    generic JSON error: no object key, no URL and no R2/boto3 detail. Django
+    never touches the PDF bytes.
+    """
+    chapter = entitled_chapter(request.user, chapter_id)
+    if chapter is None:
+        return JsonResponse({"error": "access_denied"}, status=403)
+    if not chapter.pdf_object_key:
+        return JsonResponse({"error": "not_available"}, status=404)
+    try:
+        url = presign_pdf_get(chapter.pdf_object_key)
+    except R2Error as exc:
+        logger.error("Chapter %s PDF presign failed: %s", chapter.pk, exc)
+        return JsonResponse({"error": "unavailable"}, status=503)
+
+    # One row per (user, chapter): create it completed, or on a repeat access
+    # keep it completed and advance last_accessed_at (auto_now, saved by
+    # update_or_create). The unique constraint makes concurrent first opens safe.
+    UserChapterProgress.objects.update_or_create(
+        user=request.user, chapter=chapter, defaults={"is_completed": True}
+    )
+    return JsonResponse({"url": url, "expires_in": PRESIGNED_URL_EXPIRY_SECONDS})
 
 
 @student_page()

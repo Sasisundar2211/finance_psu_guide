@@ -16,6 +16,16 @@ urlpatterns = [
     path("dashboard/", student_views.dashboard, name="dashboard"),
     path("library/", student_views.my_courses, name="my_courses"),
     path("library/course/<int:pk>/", student_views.course_library, name="course_library"),
+    path(
+        "library/chapter/<int:chapter_id>/",
+        student_views.chapter_viewer,
+        name="chapter_viewer",
+    ),
+    path(
+        "library/chapter/<int:chapter_id>/signed-url/",
+        student_views.chapter_signed_url,
+        name="chapter_signed_url",
+    ),
     path("my-mock-tests/", student_views.my_mock_tests, name="my_mock_tests"),
     path("profile/", student_views.profile, name="profile"),
 ]
