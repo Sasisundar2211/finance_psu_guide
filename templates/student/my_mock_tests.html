@@ -21,10 +21,10 @@
                     &middot; Purchased {{ row.purchased_at|date:"j F Y" }}
                 </div>
             </div>
+            {% include "student/_mock_test_action.html" with mock_test=row.mock_test attempt=row.attempt question_count=row.question_count can_start=row.mock_test.is_published %}
         </li>
         {% endfor %}
     </ul>
-    <p class="small text-body-secondary mt-2">Taking a mock test is coming soon.</p>
     {% else %}
     <p class="text-body-secondary" id="mock-tests-empty">You haven't purchased a mock test yet. <a href="{% url 'mock_test_list' %}">Browse mock tests</a></p>
     {% endif %}

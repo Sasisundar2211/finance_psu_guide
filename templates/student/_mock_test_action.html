@@ -1,0 +1,18 @@
+{# Start / Resume / View result for one mock test. Needs: mock_test, attempt (latest own or None), question_count, can_start. #}
+<span class="d-flex flex-wrap align-items-center gap-2">
+    {% if attempt and not attempt.submitted_at %}
+    <a class="btn btn-sm btn-primary" href="{% url 'attempt_page' attempt.pk %}">Resume attempt</a>
+    {% else %}
+    {% if attempt %}
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'attempt_page' attempt.pk %}">View result ({{ attempt.score }}/{{ attempt.total_questions }})</a>
+    {% endif %}
+    {% if question_count and can_start %}
+    <form method="post" action="{% url 'mock_test_start' mock_test.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary">{% if attempt %}Start a new attempt{% else %}Start test{% endif %}</button>
+    </form>
+    {% elif not question_count %}
+    <span class="small text-body-secondary">No questions have been added yet.</span>
+    {% endif %}
+    {% endif %}
+</span>

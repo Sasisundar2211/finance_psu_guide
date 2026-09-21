@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from core import student_views, views
+from core import mock_views, practice_views, student_views, views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -25,6 +25,33 @@ urlpatterns = [
         "library/chapter/<int:chapter_id>/signed-url/",
         student_views.chapter_signed_url,
         name="chapter_signed_url",
+    ),
+    path(
+        "library/chapter/<int:chapter_id>/practice/",
+        practice_views.practice_page,
+        name="practice_page",
+    ),
+    path(
+        "course/chapter/<int:chapter_id>/practice-mcqs/",
+        practice_views.practice_mcqs,
+        name="practice_mcqs",
+    ),
+    path(
+        "course/chapter/<int:chapter_id>/practice-mcqs/<int:question_id>/check/",
+        practice_views.practice_check,
+        name="practice_check",
+    ),
+    path("mocktest/<int:mock_test_id>/start/", mock_views.start, name="mock_test_start"),
+    path("mocktest/attempt/<int:attempt_id>/", mock_views.attempt_page, name="attempt_page"),
+    path(
+        "mocktest/attempt/<int:attempt_id>/autosave/",
+        mock_views.autosave,
+        name="attempt_autosave",
+    ),
+    path(
+        "mocktest/attempt/<int:attempt_id>/submit/",
+        mock_views.submit,
+        name="attempt_submit",
     ),
     path("my-mock-tests/", student_views.my_mock_tests, name="my_mock_tests"),
     path("profile/", student_views.profile, name="profile"),

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Practice MCQs — {{ chapter.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4" id="practice-root" data-list-url="{% url 'practice_mcqs' chapter.pk %}">
+    {% csrf_token %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'my_courses' %}">My Courses</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'course_library' course.pk %}">{{ course.title }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ chapter.title }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-1">Practice MCQs</h1>
+    <p class="text-body-secondary small">{{ chapter.title }} &middot; {{ book.title }}. Untimed: choose an option to see straight away whether it is right. Nothing here is saved or scored.</p>
+
+    <div id="practice-status" class="alert alert-secondary" role="status">Loading questions&hellip;</div>
+
+    <div id="practice-card" class="card d-none">
+        <div class="card-body">
+            <p class="small text-body-secondary mb-2" id="practice-counter"></p>
+            <p class="fw-semibold" id="practice-text"></p>
+            <div class="list-group mb-3" id="practice-options"></div>
+            <div id="practice-feedback" class="d-none" role="status" aria-live="polite">
+                <p class="fw-semibold mb-1" id="practice-verdict"></p>
+                <p class="mb-1" id="practice-correct"></p>
+                <p class="mb-0 text-body-secondary d-none" id="practice-explanation"></p>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="practice-prev">Previous</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="practice-next">Next</button>
+        </div>
+    </div>
+    <noscript><p class="alert alert-warning mt-2">JavaScript is required for practice questions.</p></noscript>
+
+    <script>
+{% verbatim %}
+// Practice MCQs (REQ-COURSE-05, API.md §6): stateless, untimed, immediate feedback.
+// Questions arrive without the answer key; the key and explanation come back
+// only in the response to checking one specific answer.
+(function () {
+  "use strict";
+  var root = document.getElementById("practice-root");
+  var listUrl = root.dataset.listUrl;
+  var csrfToken = root.querySelector("[name=csrfmiddlewaretoken]").value;
+  var statusBox = document.getElementById("practice-status");
+  var card = document.getElementById("practice-card");
+  var counter = document.getElementById("practice-counter");
+  var textEl = document.getElementById("practice-text");
+  var optionsEl = document.getElementById("practice-options");
+  var feedback = document.getElementById("practice-feedback");
+  var verdict = document.getElementById("practice-verdict");
+  var correctEl = document.getElementById("practice-correct");
+  var explanationEl = document.getElementById("practice-explanation");
+  var prevButton = document.getElementById("practice-prev");
+  var nextButton = document.getElementById("practice-next");
+
+  var questions = [];
+  var index = 0;
+  var results = new Map();   // question id -> { selected, correct, correct_option, explanation }
+  var checking = false;
+
+  function showStatus(text) { statusBox.textContent = text; statusBox.classList.remove("d-none"); }
+
+  function paintOption(button, letter, result) {
+    button.classList.remove("list-group-item-success", "list-group-item-danger");
+    if (!result) { return; }
+    if (letter === result.correct_option) { button.classList.add("list-group-item-success"); }
+    else if (letter === result.selected) { button.classList.add("list-group-item-danger"); }
+  }
+
+  function render() {
+    var question = questions[index];
+    var result = results.get(question.id);
+    counter.textContent = "Question " + (index + 1) + " of " + questions.length;
+    textEl.textContent = question.text;
+    optionsEl.replaceChildren();
+    ["A", "B", "C", "D"].forEach(function (letter) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "list-group-item list-group-item-action";
+      button.textContent = letter + ". " + question["option_" + letter.toLowerCase()];
+      button.disabled = !!result;
+      paintOption(button, letter, result);
+      button.addEventListener("click", function () { check(question, letter); });
+      optionsEl.appendChild(button);
+    });
+    feedback.classList.toggle("d-none", !result);
+    if (result) {
+      verdict.textContent = result.correct ? "Correct" : "Incorrect";
+      verdict.className = "fw-semibold mb-1 " + (result.correct ? "text-success" : "text-danger");
+      correctEl.textContent = "Correct answer: " + result.correct_option;
+      explanationEl.textContent = result.explanation || "";
+      explanationEl.classList.toggle("d-none", !result.explanation);
+    }
+    prevButton.disabled = index === 0;
+    nextButton.disabled = index === questions.length - 1;
+  }
+
+  async function check(question, letter) {
+    if (checking || results.has(question.id)) { return; }
+    checking = true;
+    try {
+      var response = await fetch(listUrl + question.id + "/check/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRFToken": csrfToken },
+        body: JSON.stringify({ selected_option: letter })
+      });
+      if (!response.ok) { showStatus("Could not check that answer (error " + response.status + "). Try again."); return; }
+      var data = await response.json();
+      statusBox.classList.add("d-none");
+      results.set(question.id, {
+        selected: letter, correct: data.correct,
+        correct_option: data.correct_option, explanation: data.explanation
+      });
+      render();
+    } catch (err) {
+      showStatus("Could not check that answer – connection problem. Try again.");
+    } finally {
+      checking = false;
+    }
+  }
+
+  prevButton.addEventListener("click", function () { if (index > 0) { index -= 1; render(); } });
+  nextButton.addEventListener("click", function () { if (index < questions.length - 1) { index += 1; render(); } });
+
+  fetch(listUrl, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+    .then(function (response) {
+      if (!response.ok) { throw new Error("status " + response.status); }
+      return response.json();
+    })
+    .then(function (data) {
+      questions = data.questions;
+      if (!questions.length) { showStatus("There are no practice questions for this chapter yet."); return; }
+      statusBox.classList.add("d-none");
+      card.classList.remove("d-none");
+      render();
+    })
+    .catch(function () { showStatus("Could not load the practice questions. Please reload the page."); });
+})();
+{% endverbatim %}
+    </script>
+</main>
+{% endblock %}
