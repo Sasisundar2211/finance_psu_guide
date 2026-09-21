@@ -265,7 +265,8 @@ class CourseTests(PublicTestCase):
         self.assertIn(f'href="{reverse("account_login")}{next_param}"', html)
         self.assertIn(f'href="{reverse("account_signup")}{next_param}"', html)
 
-    def test_authenticated_detail_keeps_enroll_cta_disabled_without_login_prompts(self):
+    def test_authenticated_detail_without_plans_keeps_enroll_cta_disabled_without_login_prompts(self):
+        # Phase 8: a course with no PricingPlan has nothing to buy, so the CTA stays disabled.
         course = make_course()
         self.client.force_login(User.objects.create_user("student", "s@example.com", "x"))
         html = self.get("course_detail", course.pk).content.decode()
@@ -273,7 +274,7 @@ class CourseTests(PublicTestCase):
         self.assertNotIn(f'href="{reverse("account_login")}', html)
         self.assertEqual(html.count("Enroll Now"), 1)
         self.assertIn('data-enroll-state="unavailable"', html)
-        self.assertIn("Online enrollment is not open yet.", html)
+        self.assertRegex(html, r"<button[^>]*\bdisabled\b[^>]*>Enroll Now</button>")
 
     def test_html_in_course_fields_is_escaped(self):
         course = make_course(
@@ -637,26 +638,38 @@ class EnrollCtaTests(PublicTestCase):
         login = self.client.get(self.login_next(course)).content.decode()
         self.assertIn(f'value="{reverse("course_detail", args=[course.pk])}"', login)
 
-    def test_authenticated_cta_stays_visible_but_is_a_disabled_non_link(self):
+    def test_authenticated_card_cta_is_a_link_to_the_detail_page_where_the_plan_is_chosen(self):
+        # Phase 8: cards have no plan selector, so a signed-in student's Enroll Now
+        # leads to the detail page (the only place checkout starts), never to checkout itself.
         course = make_course()
         self.client.force_login(User.objects.create_user("student", "s@example.com", "x"))
-        for name, args in (("home", ()), ("course_list", ()), ("course_detail", (course.pk,))):
-            html = self.get(name, *args).content.decode()
-            self.assertIn("Enroll Now", html, name)
-            self.assertNotRegex(html, r"<a[^>]*>Enroll Now</a>", name)
-            self.assertRegex(html, r"<button[^>]*\bdisabled\b[^>]*>Enroll Now</button>", name)
-            self.assertIn("Online enrollment is not open yet.", html, name)
+        detail = reverse("course_detail", args=[course.pk])
+        for name in ("home", "course_list"):
+            html = self.get(name).content.decode()
+            self.assertIn('data-enroll-state="choose-plan"', html, name)
+            self.assertRegex(html, rf'<a[^>]*href="{detail}"[^>]*>Enroll Now</a>', name)
+            self.assertNotRegex(html, r"<button[^>]*>Enroll Now</button>", name)
+            self.assertNotIn("data-checkout-button", html, name)
 
-    def test_no_checkout_payment_or_write_behavior_is_invented(self):
+    def test_checkout_and_payment_stay_off_anonymous_pages_and_off_the_card_lists(self):
         course = make_course()
         PricingPlan.objects.create(course=course, duration_months=3, price_paise=99900)
-        clients = [self.client_class(), self.client_class()]
-        clients[1].force_login(User.objects.create_user("student", "s@example.com", "x"))
-        for client in clients:
-            for url in (reverse("home"), reverse("course_list"), reverse("course_detail", args=[course.pk])):
-                html = client.get(url).content.decode().lower()
-                for forbidden in ("checkout", "razorpay", "/orders", "payment"):
-                    self.assertNotIn(forbidden, html, url)
+        anonymous, student = self.client_class(), self.client_class()
+        student.force_login(User.objects.create_user("student", "s@example.com", "x"))
+        detail = reverse("course_detail", args=[course.pk])
+        pages = [
+            (anonymous, reverse("home")),
+            (anonymous, reverse("course_list")),
+            (anonymous, detail),
+            (student, reverse("home")),
+            (student, reverse("course_list")),
+        ]
+        for client, url in pages:
+            html = client.get(url).content.decode().lower()
+            for forbidden in ("checkout", "razorpay", "/orders", "payment"):
+                self.assertNotIn(forbidden, html, url)
+        # Viewing any page, including the signed-in detail page, only reads.
+        student.get(detail)
         self.assertEqual(Order.objects.count() + Enrollment.objects.count(), 0)
 
 

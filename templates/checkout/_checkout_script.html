@@ -1,0 +1,110 @@
+{% comment %}
+  PHASE 8 (REQ-PAY-01/02): vanilla-JS driver for the Razorpay hosted Checkout widget.
+  No custom card/UPI form: Razorpay Checkout owns every payment method screen.
+
+  The ONLY request this script makes that changes anything is create-order (POST).
+  The Checkout success callback below is UX only: it makes no grant/verify request and
+  never sends the payment id or signature anywhere. Access is granted by the verified
+  server-side webhook alone; this script merely polls a read-only status endpoint,
+  for a bounded time, and then sends the student to the dashboard.
+{% endcomment %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+(function () {
+    "use strict";
+    var POLL_INTERVAL_MS = 2000;
+    var MAX_POLLS = 15; // bounded: about 30 seconds, then a safe "still confirming" message
+
+    var button = document.querySelector("[data-checkout-button]");
+    if (!button) return;
+    var statusBox = document.querySelector("[data-checkout-status]");
+    var pendingLinks = document.querySelector("[data-checkout-pending-links]");
+    var paid = false;
+
+    function say(message) { statusBox.textContent = message; }
+    function reenable() { button.disabled = false; }
+
+    function selectedPlanId() {
+        var checked = document.querySelector('#plan-selector input[name="plan"]:checked');
+        var id = checked ? parseInt(checked.value, 10) : NaN;
+        return isNaN(id) ? null : id;
+    }
+
+    function giveUp() {
+        say("We are still confirming your payment. Your access appears automatically once it is confirmed; check the links below in a few minutes.");
+        pendingLinks.hidden = false;
+    }
+
+    function pollStatus(orderId, attempt) {
+        var url = button.dataset.statusUrlTemplate.replace("ORDER_ID", encodeURIComponent(orderId));
+        fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+            .then(function (response) { return response.ok ? response.json() : null; })
+            .catch(function () { return null; })
+            .then(function (data) {
+                if (data && data.status === "verified") {
+                    say("Payment verified. Taking you to your dashboard...");
+                    window.location.assign(button.dataset.dashboardUrl);
+                    return;
+                }
+                if (attempt + 1 >= MAX_POLLS) { giveUp(); return; }
+                window.setTimeout(function () { pollStatus(orderId, attempt + 1); }, POLL_INTERVAL_MS);
+            });
+    }
+
+    function openCheckout(order) {
+        if (typeof window.Razorpay === "undefined") {
+            say("Payment is unavailable right now. Please try again later.");
+            reenable();
+            return;
+        }
+        var checkout = new window.Razorpay({
+            key: order.razorpay_key_id,
+            order_id: order.razorpay_order_id,
+            amount: order.amount_paise,
+            currency: order.currency,
+            name: "Finance PSU Guide",
+            handler: function () {
+                // UX only. Nothing here grants access; the server-side webhook does.
+                paid = true;
+                say("Payment received. Verifying payment...");
+                pollStatus(order.razorpay_order_id, 0);
+            },
+            modal: {
+                ondismiss: function () {
+                    if (paid) return;
+                    say("Checkout closed. You can start again whenever you like.");
+                    reenable();
+                }
+            }
+        });
+        checkout.on("payment.failed", function () {
+            say("The payment did not go through. You can try again.");
+            reenable();
+        });
+        checkout.open();
+    }
+
+    button.addEventListener("click", function () {
+        var planId = selectedPlanId();
+        if (planId === null) { say("Please choose a plan first."); return; }
+        button.disabled = true;
+        say("Preparing checkout...");
+        fetch(button.dataset.createOrderUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-CSRFToken": button.dataset.csrfToken
+            },
+            body: JSON.stringify({ target_type: button.dataset.targetType, pricing_plan_id: planId })
+        })
+            .then(function (response) { return response.ok ? response.json() : Promise.reject(); })
+            .then(openCheckout)
+            .catch(function () {
+                say("We could not start the payment. Please try again in a moment.");
+                reenable();
+            });
+    });
+})();
+</script>

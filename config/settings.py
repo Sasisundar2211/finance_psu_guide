@@ -109,6 +109,13 @@ R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "").strip()
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 
+# Razorpay (API.md §2, SECURITY.md §2/§4). Environment-only, blank-safe so importing
+# settings never needs credentials; core.payments fails closed when they are missing.
+# RAZORPAY_KEY_ID is public to Razorpay Checkout; the two secrets are never rendered or logged.
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
