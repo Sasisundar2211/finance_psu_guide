@@ -25,7 +25,20 @@
             <div class="card">
                 <div class="card-body">
                     <h2 class="h5 card-title">Pricing</h2>
-                    {% if mock_test.pricing_plans.all %}
+                    {% if mock_test.pricing_plans.all and user.is_authenticated %}
+                    {# Standalone purchase (REQ-MOCK-02): the plan row, not this page, sets the price. #}
+                    <fieldset class="mb-3" id="plan-selector">
+                        <legend class="h6">Choose a plan</legend>
+                        {% for plan in mock_test.pricing_plans.all %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="plan"
+                                   id="plan-{{ plan.pk }}" value="{{ plan.pk }}"{% if forloop.first %} checked{% endif %}>
+                            <label class="form-check-label fw-semibold" for="plan-{{ plan.pk }}">{{ plan.price_paise|inr }}</label>
+                        </div>
+                        {% endfor %}
+                    </fieldset>
+                    {% include "checkout/_checkout_button.html" with target_type="mock_test" label="Buy Now" block_class="w-100" %}
+                    {% elif mock_test.pricing_plans.all %}
                     <ul class="list-unstyled fw-semibold mb-3">
                         {% for plan in mock_test.pricing_plans.all %}<li>{{ plan.price_paise|inr }}</li>{% endfor %}
                     </ul>
@@ -43,4 +56,8 @@
         </aside>
     </div>
 </main>
+
+{% if user.is_authenticated and mock_test.pricing_plans.all %}
+{% include "checkout/_checkout_script.html" %}
+{% endif %}
 {% endblock %}

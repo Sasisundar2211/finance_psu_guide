@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from core import mock_views, practice_views, student_views, views
+from core import mock_views, payment_views, practice_views, student_views, views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -53,6 +53,17 @@ urlpatterns = [
         mock_views.submit,
         name="attempt_submit",
     ),
+    path(
+        "checkout/create-order/",
+        payment_views.create_order,
+        name="checkout_create_order",
+    ),
+    path(
+        "checkout/order/<str:razorpay_order_id>/status/",
+        payment_views.order_status,
+        name="checkout_order_status",
+    ),
+    path("checkout/webhook/", payment_views.razorpay_webhook, name="checkout_webhook"),
     path("my-mock-tests/", student_views.my_mock_tests, name="my_mock_tests"),
     path("profile/", student_views.profile, name="profile"),
 ]

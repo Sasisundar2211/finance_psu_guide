@@ -64,7 +64,7 @@
                     {% endif %}
                     {% endwith %}
 
-                    {% include "courses/_enroll_cta.html" with block_class="w-100" %}
+                    {% include "courses/_enroll_cta.html" with block_class="w-100" checkout=True %}
                     {% if not user.is_authenticated %}
                     <p class="small text-body-secondary mt-2 mb-2">You will be asked to log in or create an account first.</p>
                     <a class="btn btn-outline-secondary w-100" href="{% url 'account_signup' %}?next={{ request.path|urlencode }}">Create an account</a>
@@ -75,6 +75,9 @@
     </div>
 </main>
 
+{% if user.is_authenticated and course.pricing_plans.all %}
+{% include "checkout/_checkout_script.html" %}
+{% endif %}
 {% if course.pricing_plans.all %}
 <script>
 (function () {

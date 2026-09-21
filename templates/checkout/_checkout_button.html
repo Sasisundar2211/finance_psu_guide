@@ -1,0 +1,18 @@
+{% comment %}
+  PHASE 8 (REQ-PAY-01): the Razorpay Checkout trigger. Rendered only for signed-in students,
+  so the CSRF token never appears on an anonymous (edge-cacheable) page.
+  Expects: target_type ("course" | "mock_test"), label. Optional: block_class.
+  Driven by checkout/_checkout_script.html, which must be included once on the same page.
+{% endcomment %}
+<button type="button" class="btn btn-primary {{ block_class }}" data-enroll-state="checkout"
+        data-checkout-button data-target-type="{{ target_type }}"
+        data-create-order-url="{% url 'checkout_create_order' %}"
+        data-status-url-template="{% url 'checkout_order_status' 'ORDER_ID' %}"
+        data-dashboard-url="{% url 'dashboard' %}"
+        data-csrf-token="{{ csrf_token }}">{{ label }}</button>
+<div class="small mt-2" data-checkout-status role="status" aria-live="polite"></div>
+<p class="small mt-1 mb-0" data-checkout-pending-links hidden>
+    <a href="{% url 'dashboard' %}">Dashboard</a> &middot;
+    <a href="{% url 'my_courses' %}">My Courses</a> &middot;
+    <a href="{% url 'my_mock_tests' %}">My Mock Tests</a>
+</p>

@@ -1,17 +1,23 @@
 {% comment %}
-  PHASE 5/8 BOUNDARY (REQ-WEB-03/04/07): the only place the Enroll Now CTA is decided.
-  Phase 4 renders the required CTA but implements no checkout, Order, Enrollment or
-  payment behavior. Replace this partial when the real enrollment flow lands.
-  Expects: course. Optional: block_class (e.g. "w-100").
+  PHASE 8 (REQ-PAY-01, REQ-WEB-03/04/07): the only place the course Enroll Now CTA is decided.
+    - anonymous: log in first (unchanged; the student returns via ?next=).
+    - signed in, on a card: link to the detail page, where the plan is chosen.
+    - signed in, on the detail page (checkout=True) with plans: the Razorpay Checkout button.
+  Viewing a page never creates an Order; only the create-order POST behind the button does.
+  Expects: course. Optional: block_class (e.g. "w-100"), checkout (detail page only).
 {% endcomment %}
 {% url 'course_detail' course.pk as detail_url %}
 <div>
-    {% if user.is_authenticated %}
-    <button type="button" class="btn btn-primary {{ block_class }}" disabled aria-disabled="true"
-            data-enroll-state="unavailable">Enroll Now</button>
-    <span class="d-block small text-body-secondary mt-1">Online enrollment is not open yet.</span>
-    {% else %}
+    {% if not user.is_authenticated %}
     <a class="btn btn-primary {{ block_class }}" data-enroll-state="login"
        href="{% url 'account_login' %}?next={{ detail_url|urlencode }}">Enroll Now</a>
+    {% elif checkout and course.pricing_plans.all %}
+    {% include "checkout/_checkout_button.html" with target_type="course" label="Enroll Now" %}
+    {% elif checkout %}
+    <button type="button" class="btn btn-primary {{ block_class }}" disabled aria-disabled="true"
+            data-enroll-state="unavailable">Enroll Now</button>
+    {% else %}
+    <a class="btn btn-primary {{ block_class }}" data-enroll-state="choose-plan"
+       href="{{ detail_url }}">Enroll Now</a>
     {% endif %}
 </div>
