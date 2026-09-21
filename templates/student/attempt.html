@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}{{ mock_test.title }} — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'my_mock_tests' %}">My Mock Tests</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ mock_test.title }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-3">{{ mock_test.title }}</h1>
+
+    {% if attempt.submitted_at %}
+    <section id="attempt-result" aria-labelledby="result-heading">
+        <h2 class="h5" id="result-heading">Result</h2>
+        <p class="fs-4 mb-1" id="result-score">Score: {{ attempt.score }} / {{ attempt.total_questions }}</p>
+        <p class="text-body-secondary">This attempt was finalized on {{ attempt.submitted_at|date:"j F Y, H:i" }} UTC. Its answers can no longer be changed.</p>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-primary" href="{% url 'my_mock_tests' %}">My Mock Tests</a>
+            <a class="btn btn-outline-secondary" href="{% url 'my_courses' %}">My Courses</a>
+        </div>
+    </section>
+    {% else %}
+    <div id="attempt-root"
+         data-autosave-url="{% url 'attempt_autosave' attempt.pk %}"
+         data-submit-url="{% url 'attempt_submit' attempt.pk %}"
+         data-remaining-seconds="{{ remaining_seconds }}">
+        {% csrf_token %}
+        <div class="sticky-top bg-body border rounded p-2 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2" style="top: .5rem">
+            <span>Time left: <strong id="attempt-timer" role="timer">&ndash;</strong></span>
+            <span class="small" id="attempt-status" role="status" aria-live="polite">Saved</span>
+            <button type="button" class="btn btn-primary btn-sm" id="attempt-submit">Submit test</button>
+        </div>
+        <p class="small text-body-secondary">Your answers are saved to the server as you choose them. The countdown is only a display: the server decides when time is up.</p>
+
+        {% for question in questions %}
+        <div class="card mb-3" role="group" aria-labelledby="ql{{ question.id }}" data-question-id="{{ question.id }}">
+            <div class="card-body">
+                <p class="fw-semibold" id="ql{{ question.id }}">{{ forloop.counter }}. {{ question.text }}</p>
+                {% for letter, label in question.options %}
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="q{{ question.id }}" id="q{{ question.id }}{{ letter }}" value="{{ letter }}"{% if question.selected == letter %} checked{% endif %}>
+                    <label class="form-check-label" for="q{{ question.id }}{{ letter }}">{{ letter }}. {{ label }}</label>
+                </div>
+                {% endfor %}
+                <button type="button" class="btn btn-link btn-sm p-0 mt-1 clear-answer">Clear answer</button>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-body-secondary" id="attempt-empty">This mock test has no questions.</p>
+        {% endfor %}
+        <noscript><p class="alert alert-warning">JavaScript is required to take a mock test.</p></noscript>
+    </div>
+
+    <script>
+{% verbatim %}
+// Mock-test attempt page (REQ-MOCK-01/04, API.md §5).
+// The countdown is DISPLAY ONLY. The server owns the deadline and rejects
+// late answers; this script never sends or derives a time, only answers.
+(function () {
+  "use strict";
+  var root = document.getElementById("attempt-root");
+  var timerEl = document.getElementById("attempt-timer");
+  var statusEl = document.getElementById("attempt-status");
+  var submitButton = document.getElementById("attempt-submit");
+  var csrfToken = root.querySelector("[name=csrfmiddlewaretoken]").value;
+
+  // IMPLEMENTATION DETAIL (not a frozen requirement): an answer change is sent
+  // after a short pause, and a periodic pass retries anything still unsaved.
+  var DEBOUNCE_MS = 400;
+  var SAFETY_MS = 15000;
+  var RETRY_SUBMIT_MS = 3000;
+
+  var remaining = Number(root.dataset.remainingSeconds);
+  var startedAt = performance.now();
+  var dirty = new Map();   // question id -> "A".."D" | null, not yet acknowledged by the server
+  var flushing = null;     // the single in-flight flush promise
+  var debounceTimer = null;
+  var finished = false;
+  var submitting = false;
+  var nextAutoSubmit = 0;
+
+  function setStatus(text, isError) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle("text-danger", !!isError);
+  }
+
+  function post(url, body) {
+    return fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRFToken": csrfToken
+      },
+      body: JSON.stringify(body)
+    });
+  }
+
+  function setEditable(editable) {
+    root.querySelectorAll("input[type=radio], .clear-answer").forEach(function (el) {
+      el.disabled = !editable;
+    });
+  }
+
+  // The server says the attempt is final: stop editing and show the stored result.
+  function onFinalized() {
+    if (finished) { return; }
+    finished = true;
+    setEditable(false);
+    submitButton.disabled = true;
+    setStatus("Test finalized. Loading your result…");
+    window.location.reload();
+  }
+
+  function flush() {
+    if (flushing) { return flushing; }
+    flushing = (async function () {
+      try {
+        while (dirty.size && !finished) {
+          var entry = dirty.entries().next().value;
+          var questionId = entry[0], option = entry[1];
+          setStatus("Saving…");
+          var response;
+          try {
+            response = await post(root.dataset.autosaveUrl, { question_id: questionId, selected_option: option });
+          } catch (err) {
+            setStatus("Not saved – connection problem. Retrying…", true);
+            return false;
+          }
+          if (response.status === 409) { onFinalized(); return false; }
+          if (!response.ok) {
+            setStatus("Not saved (error " + response.status + "). Retrying…", true);
+            return false;
+          }
+          // Only forget the answer if it was not changed while the request was in flight.
+          if (dirty.get(questionId) === option) { dirty.delete(questionId); }
+        }
+        if (!finished) { setStatus("Saved"); }
+        return true;
+      } finally {
+        flushing = null;
+      }
+    })();
+    return flushing;
+  }
+
+  function queueAnswer(questionId, option) {
+    dirty.set(questionId, option);
+    setStatus("Unsaved changes…");
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flush, DEBOUNCE_MS);
+  }
+
+  root.querySelectorAll("input[type=radio]").forEach(function (input) {
+    input.addEventListener("change", function () {
+      var card = input.closest("[data-question-id]");
+      queueAnswer(Number(card.dataset.questionId), input.value);
+    });
+  });
+  root.querySelectorAll(".clear-answer").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var card = button.closest("[data-question-id]");
+      card.querySelectorAll("input[type=radio]").forEach(function (input) { input.checked = false; });
+      queueAnswer(Number(card.dataset.questionId), null);
+    });
+  });
+
+  async function submit(auto) {
+    if (finished || submitting) { return; }
+    submitting = true;
+    submitButton.disabled = true;
+    if (!auto) {
+      // Everything the student chose must reach the server before it is scored.
+      clearTimeout(debounceTimer);
+      var saved = await flush();
+      if (finished) { return; }
+      if (!saved && dirty.size) {
+        setStatus("Some answers could not be saved. Check your connection and try again.", true);
+        submitButton.disabled = false;
+        submitting = false;
+        return;
+      }
+    }
+    var response;
+    try {
+      response = await post(root.dataset.submitUrl, {});
+    } catch (err) {
+      setStatus("Could not submit – connection problem.", true);
+      submitButton.disabled = false;
+      submitting = false;
+      nextAutoSubmit = performance.now() + RETRY_SUBMIT_MS;
+      return;
+    }
+    if (response.ok || response.status === 409) { onFinalized(); return; }
+    setStatus("Could not submit (error " + response.status + ").", true);
+    submitButton.disabled = false;
+    submitting = false;
+    nextAutoSubmit = performance.now() + RETRY_SUBMIT_MS;
+  }
+
+  function formatTime(totalSeconds) {
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  function tick() {
+    if (finished) { return; }
+    var left = Math.max(0, Math.ceil(remaining - (performance.now() - startedAt) / 1000));
+    timerEl.textContent = formatTime(left);
+    if (left === 0) {
+      // Display reached zero: stop editing and ask the server to finalize.
+      setEditable(false);
+      if (!submitting && performance.now() >= nextAutoSubmit) { submit(true); }
+    }
+  }
+
+  submitButton.addEventListener("click", function () { submit(false); });
+  setInterval(function () { if (dirty.size && !flushing && !finished) { flush(); } }, SAFETY_MS);
+  setInterval(tick, 500);
+  tick();
+})();
+{% endverbatim %}
+    </script>
+    {% endif %}
+</main>
+{% endblock %}

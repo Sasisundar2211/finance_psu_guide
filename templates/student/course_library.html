@@ -27,6 +27,7 @@
                     <span class="d-flex align-items-center gap-2">
                         {% if chapter.pk in completed_ids %}<span class="badge text-bg-success">Completed</span>{% endif %}
                         <a class="btn btn-sm btn-outline-primary" href="{% url 'chapter_viewer' chapter.pk %}">Open study material</a>
+                        {% if chapter.practice_count %}<a class="btn btn-sm btn-outline-success" href="{% url 'practice_page' chapter.pk %}">Practice MCQs ({{ chapter.practice_count }})</a>{% endif %}
                     </span>
                 </li>
                 {% endfor %}
@@ -45,13 +46,16 @@
         {% if mock_tests %}
         <ul class="list-group">
             {% for link in mock_tests %}
-            <li class="list-group-item d-flex justify-content-between">
-                <a href="{% url 'mock_test_detail' link.mock_test.pk %}">{{ link.mock_test.title }}</a>
-                <span class="small text-body-secondary">{{ link.mock_test.duration_minutes }} minute{{ link.mock_test.duration_minutes|pluralize }}</span>
+            <li class="list-group-item d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <span>
+                    <a href="{% url 'mock_test_detail' link.mock_test.pk %}">{{ link.mock_test.title }}</a>
+                    <span class="small text-body-secondary">&middot; {{ link.mock_test.duration_minutes }} minute{{ link.mock_test.duration_minutes|pluralize }}</span>
+                </span>
+                {% include "student/_mock_test_action.html" with mock_test=link.mock_test attempt=link.attempt question_count=link.question_count can_start=True %}
             </li>
             {% endfor %}
         </ul>
-        <p class="small text-body-secondary mt-2">These are included with your course. Taking a mock test is coming soon.</p>
+        <p class="small text-body-secondary mt-2">These are included with your course.</p>
         {% else %}
         <p class="text-body-secondary" id="included-tests-empty">No mock tests are included with this course.</p>
         {% endif %}

@@ -6,7 +6,8 @@ Everything here is per-student, so every response is private/no-store
 (SECURITY.md §9) and every course/mock-test decision goes through
 `core.access`. The only writes are `chapter_signed_url` recording chapter
 progress after a successful entitled PDF access (API.md §3); nothing here
-grants access or starts an attempt (Phases 7-8).
+grants access (Phase 8) or starts an attempt (`core.mock_views`). The list
+pages only read a student's attempts to pick Start / Resume / View result.
 """
 
 import logging
@@ -23,6 +24,7 @@ from django.utils.cache import add_never_cache_headers
 from django.views.decorators.http import require_http_methods
 
 from .access import accessible_mock_tests, active_enrollments, can_access_course
+from .attempts import latest_attempts, question_counts
 from .forms import ProfileForm
 from .models import (
     Chapter,
@@ -134,6 +136,21 @@ def recently_accessed_course(user):
     return row.chapter.book.course if row else None
 
 
+def with_attempt_state(user, rows):
+    """Attach `.attempt` (latest own Attempt or None) and `.question_count` to rows.
+
+    `rows` each carry a `mock_test_id`. Two queries in total, however many rows;
+    the templates use this only to choose Start / Resume / View result.
+    """
+    ids = [row.mock_test_id for row in rows]
+    attempts = latest_attempts(user, ids)
+    counts = question_counts(ids)
+    for row in rows:
+        row.attempt = attempts.get(row.mock_test_id)
+        row.question_count = counts.get(row.mock_test_id, 0)
+    return rows
+
+
 def standalone_mock_tests(user):
     """The user's standalone purchases, one per mock test (My Mock Tests).
 
@@ -194,9 +211,9 @@ def course_library(request, pk):
     books = course.books.prefetch_related(
         Prefetch(
             "chapters",
-            queryset=Chapter.objects.only("id", "title", "order", "book_id").order_by(
-                "order", "pk"
-            ),
+            queryset=Chapter.objects.only("id", "title", "order", "book_id")
+            .annotate(practice_count=Count("questions"))
+            .order_by("order", "pk"),
         )
     ).order_by("order", "pk")
     completed_ids = set(
@@ -204,10 +221,13 @@ def course_library(request, pk):
             user=request.user, is_completed=True, chapter__book__course=course
         ).values_list("chapter_id", flat=True)
     )
-    mock_tests = (
-        CourseMockTest.objects.filter(course=course, mock_test__is_published=True)
-        .select_related("mock_test")
-        .order_by("order", "pk")
+    mock_tests = with_attempt_state(
+        request.user,
+        list(
+            CourseMockTest.objects.filter(course=course, mock_test__is_published=True)
+            .select_related("mock_test")
+            .order_by("order", "pk")
+        ),
     )
     return render(
         request,
@@ -292,7 +312,7 @@ def my_mock_tests(request):
     return render(
         request,
         "student/my_mock_tests.html",
-        {"enrollments": standalone_mock_tests(request.user)},
+        {"enrollments": with_attempt_state(request.user, standalone_mock_tests(request.user))},
     )
 
 

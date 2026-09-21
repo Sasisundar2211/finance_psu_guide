@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}No access — Finance PSU Guide{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <h1 class="h3">You don't have access to this mock test</h1>
+    <p>Your account has no access to the mock test attempt you requested.</p>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="{% url 'my_mock_tests' %}">My Mock Tests</a>
+        <a class="btn btn-outline-secondary" href="{% url 'mock_test_list' %}">Browse mock tests</a>
+    </div>
+</main>
+{% endblock %}
