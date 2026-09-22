@@ -1,0 +1,47 @@
+# Secrets: a real .env must never enter the build context.
+.env
+.env.*
+
+# VCS and local tooling state
+.git
+.gitattributes
+.gitignore
+.claude
+.claude-flow
+.remember
+.serena
+.memsearch
+.vscode
+.idea
+
+# Python artifacts and virtualenvs
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+
+# Local databases, static output, media, logs, scratch
+*.sqlite3
+staticfiles
+media
+node_modules
+*.log
+*.dump
+*.enc
+*.pem
+*.key
+
+# Not needed inside the web image
+docs
+tests
+.github
+docker-compose*.yml
+Dockerfile
+.dockerignore
+deploy/nginx
+deploy/backup
+CLAUDE.md

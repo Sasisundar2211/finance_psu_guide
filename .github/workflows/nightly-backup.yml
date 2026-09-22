@@ -1,0 +1,59 @@
+# Nightly encrypted database backup (REQ-OPS-02, DEPLOYMENT.md §5, SECURITY.md §2/§8).
+#
+# The entire job is one SSH command on the OCI host that runs the `backup`
+# container's `backup` subcommand. That container reads DB_*, R2_* and
+# BACKUP_AES_PASSPHRASE from the host's own .env through Compose, so GitHub holds
+# only the three SSH secrets below and never touches Postgres, R2, or any
+# application secret. This is NOT a deploy workflow: deployment stays a manual
+# Git + Docker procedure over SSH (DEPLOYMENT.md §6).
+name: Nightly backup
+
+on:
+  schedule:
+    # 00:00 UTC daily.
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+# No repository access is needed: the job does not check out code.
+permissions: {}
+
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run encrypted backup on the OCI host
+        env:
+          OCI_SSH_HOST: ${{ secrets.OCI_SSH_HOST }}
+          OCI_SSH_USER: ${{ secrets.OCI_SSH_USER }}
+          OCI_SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+        run: |
+          set -eu
+          umask 077
+
+          # The key exists only on this ephemeral runner and is removed on exit.
+          key_file="$RUNNER_TEMP/oci_ssh_key"
+          known_hosts="$RUNNER_TEMP/oci_known_hosts"
+          trap 'rm -f "$key_file" "$known_hosts"' EXIT
+
+          printf '%s\n' "$OCI_SSH_PRIVATE_KEY" > "$key_file"
+          chmod 600 "$key_file"
+
+          # Host-key checking stays ON (StrictHostKeyChecking=yes). With only the
+          # three frozen secrets there is no pinned key, so the host key is
+          # collected at run time.
+          ssh-keyscan -H -t ed25519,ecdsa,rsa "$OCI_SSH_HOST" > "$known_hosts"
+          test -s "$known_hosts"
+
+          ssh -i "$key_file" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$known_hosts" \
+            -o ServerAliveInterval=30 \
+            "$OCI_SSH_USER@$OCI_SSH_HOST" \
+            'cd /opt/financepsuguide && docker compose -f docker-compose.prod.yml run --rm backup backup'
