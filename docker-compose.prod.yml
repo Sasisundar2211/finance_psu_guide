@@ -1,0 +1,133 @@
+# Production stack (DEPLOYMENT.md §2, §5, §6). Run from the project directory on
+# the OCI host, where the real `.env` lives (never committed, SECURITY.md §2):
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#   docker compose -f docker-compose.prod.yml exec web python manage.py migrate
+#   docker compose -f docker-compose.prod.yml run --rm backup backup
+#   docker compose -f docker-compose.prod.yml run --rm backup restore <r2-object-key>
+#
+# `up` starts only web, db and proxy. `backup` is a one-shot utility gated behind
+# a profile, so it starts only when explicitly `run`. Only `proxy` publishes host
+# ports; Postgres (5432) and Gunicorn (8000) are reachable only on the Compose network.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:18-alpine
+    shm_size: 1gb
+    restart: unless-stopped
+    # The frozen DB_* names are mapped onto the image's initialisation variables.
+    environment:
+      POSTGRES_DB: ${DB_NAME:?DB_NAME must be set in .env}
+      POSTGRES_USER: ${DB_USER:?DB_USER must be set in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    # No `ports:` on purpose. Named volume = the live application data.
+    volumes:
+      - psu_prod_db_data:/var/lib/postgresql
+    networks:
+      default:
+        aliases:
+          # Matches DB_HOST=psu_data_engine_db in .env for both `web` and `backup`.
+          - psu_data_engine_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: financepsu-web:prod
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    # No `ports:`; Gunicorn is reached only by `proxy` over the Compose network.
+    expose:
+      - "8000"
+    volumes:
+      # collectstatic output; written here, served by `proxy` (mounted read-only there).
+      - psu_prod_static:/app/staticfiles
+    healthcheck:
+      # TCP-level check that Gunicorn is accepting connections.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  proxy:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - psu_prod_static:/srv/static:ro
+      # Cloudflare Origin CA certificate + key, provisioned on the host (never
+      # committed). Missing files fail the container start instead of silently
+      # creating empty directories.
+      - type: bind
+        source: /opt/financepsu/secrets/cloudflare-origin.pem
+        target: /etc/nginx/certs/origin.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /opt/financepsu/secrets/cloudflare-origin.key
+        target: /etc/nginx/certs/origin.key
+        read_only: true
+        bind:
+          create_host_path: false
+    logging: *default-logging
+
+  backup:
+    build:
+      context: ./deploy/backup
+      dockerfile: Dockerfile
+    image: financepsu-backup:prod
+    # One-shot utility: not started by `up`, only by `run --rm backup <subcommand>`.
+    profiles:
+      - backup
+    depends_on:
+      db:
+        condition: service_healthy
+    # Only the variables the backup needs, taken from the host `.env` (Compose
+    # interpolation); RAZORPAY_*, EMAIL_* and GOOGLE_* never reach this container.
+    # The entrypoint fails by name if any required value is empty.
+    environment:
+      - DB_NAME
+      - DB_USER
+      - DB_PASSWORD
+      - DB_HOST
+      - DB_PORT
+      - R2_BUCKET_NAME
+      - R2_ENDPOINT_URL
+      - R2_ACCESS_KEY_ID
+      - R2_SECRET_ACCESS_KEY
+      - BACKUP_AES_PASSPHRASE
+    # Plaintext dumps live only in memory-backed /tmp inside the ephemeral container.
+    read_only: true
+    tmpfs:
+      - /tmp
+    # No `ports:`. Same default network as `db` (private DB access) with normal
+    # outbound egress so it can reach R2.
+    logging: *default-logging
+
+volumes:
+  psu_prod_db_data:
+  psu_prod_static:

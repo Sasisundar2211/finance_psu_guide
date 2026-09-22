@@ -97,6 +97,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+# `collectstatic` target. Production Nginx serves this directory; Django never
+# serves static files itself outside DEBUG (DEPLOYMENT.md §2, Phase 9).
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Support/Chat destination (REQ-WEB-02). The client's WhatsApp link is not
 # frozen in /docs, so it is environment-only and the nav renders nothing until set.
